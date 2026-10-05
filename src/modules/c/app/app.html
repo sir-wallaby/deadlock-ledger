@@ -1,0 +1,96 @@
+<template>
+    <div class="app slds-p-around_medium">
+        <header class="slds-m-bottom_medium">
+            <h1 class="slds-text-heading_medium app__title">Deadlock — Standard Wins</h1>
+            <p class="app__muted app__rule">
+                Ranked eligibility: 60 total Standard wins + 3 heroes with 15+ wins
+            </p>
+        </header>
+
+        <template if:true={showSearch}>
+            <c-player-search onconfirm={handleConfirm}></c-player-search>
+        </template>
+
+        <template if:false={showSearch}>
+            <section class="player-bar slds-m-bottom_medium">
+                <lightning-avatar
+                    class="player-bar__avatar slds-m-right_small"
+                    src={player.avatar}
+                    initials={playerInitials}
+                    alternative-text={player.personaname}
+                    size="large"
+                ></lightning-avatar>
+                <div class="player-bar__id">
+                    <div class="slds-text-heading_small">
+                        {displayName}
+                    </div>
+                    <div class="app__muted">account_id {player.accountId}</div>
+                </div>
+                <div class="player-bar__actions">
+                    <lightning-button
+                        label="Switch player"
+                        variant="base"
+                        class="slds-m-right_x-small"
+                        onclick={handleSwitch}
+                    ></lightning-button>
+                    <lightning-button
+                        label="Refresh"
+                        variant="brand"
+                        disabled={refreshing}
+                        onclick={handleRefresh}
+                    ></lightning-button>
+                </div>
+            </section>
+
+            <template if:true={loading}>
+                <div class="slds-grid slds-grid_vertical-align-center slds-m-around_large">
+                    <lightning-spinner
+                        alternative-text="Loading stats"
+                        variant="brand"
+                        size="large"
+                    ></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:false={loading}>
+                <template if:true={error}>
+                    <div class="slds-alert slds-alert_error slds-m-bottom_medium">
+                        <h2 class="slds-text-title">Something went wrong</h2>
+                        <p>{error}</p>
+                    </div>
+                </template>
+                <template if:false={error}>
+                    <template if:true={showStaleBanner}>
+                        <div class="slds-alert slds-alert_warning slds-m-bottom_medium">
+                            <h2 class="slds-text-title">Data may be out of date</h2>
+                            <p>{staleMessage}</p>
+                        </div>
+                    </template>
+                    <template if:true={showRecentMatches}>
+                        <section class="recent slds-m-bottom_medium">
+                            <h2 class="recent__title slds-text-heading_small">
+                                Last 3 matches <span class="recent__tz">(Eastern time)</span>
+                            </h2>
+                            <ul class="recent__list">
+                                <template for:each={recentMatches} for:item="match">
+                                    <li key={match.key} class="recent__item">
+                                        <span class={match.badgeClass}>{match.label}</span>
+                                        <img src={match.icon} alt="" class="recent__icon" />
+                                        <span class="recent__hero slds-truncate" title={match.name}>{match.name}</span>
+                                        <span class="recent__mode">{match.modeText}</span>
+                                        <span class="recent__when">{match.when}</span>
+                                    </li>
+                                </template>
+                            </ul>
+                        </section>
+                    </template>
+                    <c-hero-stats stats={stats} is-eligible={isEligible}></c-hero-stats>
+                </template>
+            </template>
+
+            <template if:true={lastUpdated}>
+                <div class="app__muted app__updated">Last updated {lastUpdated}</div>
+            </template>
+        </template>
+    </div>
+</template>

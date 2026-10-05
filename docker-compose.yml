@@ -1,0 +1,11 @@
+services:
+  deadlock-lwc:
+    build: .
+    container_name: deadlock-lwc
+    ports:
+      - "14224:80"
+    volumes:
+      # Own-account match history, refreshed every 10 min by
+      # deadlock-gc-history on wtaylor-arch (served at /data/).
+      - /home/wtaylor/deadlock-lwc-data:/usr/share/nginx/html/data:ro
+    restart: unless-stopped
