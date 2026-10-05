@@ -207,7 +207,10 @@ export default class App extends LightningElement {
                 rateLimited,
                 source,
                 localUpdated: localFileUpdated,
-            } = await getPlayerHeroStats(this.player.accountId, isMatchScored);
+            } = await getPlayerHeroStats(this.player.accountId, {
+                isScored: isMatchScored,
+                isWon: isMatchWon
+            });
             if (seq !== this.loadSeq) return; // superseded (switch/refresh) — drop stale data
             this.stats = this.computeStats(heroStats);
             this.recentMatches = this.computeRecentMatches(recentMatches);

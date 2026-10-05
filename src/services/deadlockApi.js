@@ -63,11 +63,13 @@ export function getHeroes() {
 // limit) the API still returns that stored snapshot in the body, so we use it
 // and flag it stale instead of erroring out.
 //
-// `isScored` is a predicate supplied by the caller (see outcomes.js): matches
-// it rejects (penalized, not-scored) are excluded from the per-hero
-// aggregation. Services don't import each other — LWR's bundler can't resolve
-// relative imports between non-module files.
-export async function getPlayerHeroStats(accountId, isScored = () => true) {
+// `isScored`/`isWon` are predicates supplied by the caller (see outcomes.js).
+// Services don't import each other — LWR's bundler can't resolve relative
+// imports between non-module files.
+export async function getPlayerHeroStats(accountId, {
+    isScored = () => true,
+    isWon = (m) => m.match_result === m.player_team,
+} = {}) {
     let matches = null; // null = not loaded yet (fall back to the API below)
     let fresh;
     let rateLimited = false;
@@ -91,9 +93,20 @@ export async function getPlayerHeroStats(accountId, isScored = () => true) {
                 if (apiRes.ok || apiRes.status === 429) {
                     const apiMatches = await apiRes.json();
                     if (Array.isArray(apiMatches)) {
-                        const localIds = new Set(matches.map((m) => m.match_id));
+                        const localById = new Map(matches.map((m) => [m.match_id, m]));
                         for (const m of apiMatches) {
-                            if (m && !localIds.has(m.match_id)) matches.push(m);
+                            if (!m) continue;
+                            const existing = localById.get(m.match_id);
+                            if (existing) {
+                                // The GC only synthesizes win/loss outcomes;
+                                // when the API has the real one (e.g. 3/4
+                                // penalized, 5 not-scored), prefer it.
+                                if (m.player_match_outcome) {
+                                    existing.player_match_outcome = m.player_match_outcome;
+                                }
+                            } else {
+                                matches.push(m);
+                            }
                         }
                     }
                 }
@@ -144,7 +157,8 @@ export async function getPlayerHeroStats(accountId, isScored = () => true) {
         // A win is when the player's team is the winning team. `match_result`
         // holds the winning team id and `player_team` the player's team, so a
         // win is `match_result === player_team` (not `match_result === 1`).
-        if (m.match_result === m.player_team) h.wins += 1;
+        // The caller's isWon prefers the real outcome field when present.
+        if (isWon(m)) h.wins += 1;
         h.kills += m.player_kills || 0;
         h.deaths += m.player_deaths || 0;
         h.assists += m.player_assists || 0;
