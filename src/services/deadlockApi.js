@@ -62,7 +62,12 @@ export function getHeroes() {
 // stored snapshot, which may be missing recent matches. On a 429 (hourly rate
 // limit) the API still returns that stored snapshot in the body, so we use it
 // and flag it stale instead of erroring out.
-export async function getPlayerHeroStats(accountId) {
+//
+// `isScored` is a predicate supplied by the caller (see outcomes.js): matches
+// it rejects (penalized, not-scored) are excluded from the per-hero
+// aggregation. Services don't import each other — LWR's bundler can't resolve
+// relative imports between non-module files.
+export async function getPlayerHeroStats(accountId, isScored = () => true) {
     let matches = null; // null = not loaded yet (fall back to the API below)
     let fresh;
     let rateLimited = false;
@@ -118,6 +123,9 @@ export async function getPlayerHeroStats(accountId) {
     const byHero = new Map();
     for (const m of matches) {
         if (m.game_mode !== STANDARD_GAME_MODE) continue;
+        // Penalized and not-scored matches don't count toward ranked progress,
+        // so they are excluded from the per-hero aggregation entirely.
+        if (!isScored(m)) continue;
         const heroId = m.hero_id;
         let h = byHero.get(heroId);
         if (!h) {

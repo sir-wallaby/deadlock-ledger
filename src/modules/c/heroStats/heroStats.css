@@ -7,6 +7,16 @@
     height: 160px;
 }
 
+/* CSS overrides the SVG presentation attributes, so the teapot follows the
+   theme (light and dark) without duplicating the artwork. */
+.empty__teapot .teapot-lines {
+    stroke: var(--lwc-colorTextWeak, #74685e);
+}
+
+.empty__teapot .teapot-body {
+    fill: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}
+
 .empty__msg {
     color: var(--lwc-colorTextWeak, #74685e);
 }
@@ -80,7 +90,7 @@
     object-fit: cover;
     border-radius: 0.3rem;
     flex: 0 0 auto;
-    background: #f3f2f1;
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
 }
 
 .hero-row--eligible {
@@ -97,7 +107,7 @@
     display: inline-block;
     width: 90px;
     height: 8px;
-    background: #ecebe9;
+    background: var(--lwc-colorTrack, #ecebe9);
     border-radius: 4px;
     overflow: hidden;
 }

@@ -8,9 +8,9 @@
                 role="img"
                 aria-label="teapot"
             >
-                <g fill="none" stroke="#74685e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M38 52 h44 a10 10 0 0 1 10 10 v20 a22 22 0 0 1 -22 22 h-20 a22 22 0 0 1 -22 -22 v-20 a10 10 0 0 1 10 -10 z" fill="#f3f2f1" />
-                    <path d="M92 60 l16 -8 v26 l-16 -6" fill="#f3f2f1" />
+                <g class="teapot-lines" fill="none" stroke="#74685e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+                    <path class="teapot-body" d="M38 52 h44 a10 10 0 0 1 10 10 v20 a22 22 0 0 1 -22 22 h-20 a22 22 0 0 1 -22 -22 v-20 a10 10 0 0 1 10 -10 z" fill="#f3f2f1" />
+                    <path class="teapot-body" d="M92 60 l16 -8 v26 l-16 -6" fill="#f3f2f1" />
                     <path d="M46 52 c0 -14 26 -14 26 0" />
                     <circle cx="59" cy="34" r="5" />
                     <path d="M40 96 c-8 8 -18 8 -24 2" />
@@ -27,7 +27,7 @@
                 <div class="slds-box slds-theme_shade summary__card">
                     <div class="summary__label">Total Standard Wins</div>
                     <div class="summary__value">
-                        {totalWins} <span class="summary__goal">/ 60</span>
+                        {totalWins} <span class="summary__goal">/ {totalWinsGoal}</span>
                     </div>
                     <lightning-progress-bar
                         value={totalWinsPct}
@@ -38,9 +38,9 @@
                 <div class="slds-box slds-theme_shade summary__card">
                     <div class="summary__label">Heroes at 15+ Wins</div>
                     <div class="summary__value">
-                        {eligibleCount} <span class="summary__goal">/ 3</span>
+                        {eligibleCount} <span class="summary__goal">/ {heroesNeeded}</span>
                     </div>
-                    <div class="summary__note">Need 3 heroes with 15 Standard wins each</div>
+                    <div class="summary__note">Need {heroesNeeded} heroes with {heroWinsGoal} Standard wins each</div>
                 </div>
                 <div class="slds-box slds-theme_shade summary__card">
                     <div class="summary__label">Standard Matches</div>
@@ -68,7 +68,7 @@
                             <span class="slds-truncate" title="Wins">Wins</span>
                         </th>
                         <th scope="col">
-                            <span class="slds-truncate" title="Ranked (15 wins)">Ranked (15)</span>
+                            <span class="slds-truncate" title={rankedColumnTitle}>{rankedHeader}</span>
                         </th>
                         <th scope="col">
                             <span class="slds-truncate" title="Matches">Matches</span>
@@ -93,10 +93,10 @@
                             <td data-label="Wins">
                                 <strong>{hero.wins}</strong>
                             </td>
-                            <td data-label="Ranked (15 wins)">
+                            <td data-label={rankedColumnTitle}>
                                 <template if:true={hero.eligible}>
                                     <span class="slds-badge slds-theme_success slds-badge--entity">
-                                        15 ✓
+                                        {heroWinsGoal} ✓
                                     </span>
                                 </template>
                                 <template if:false={hero.eligible}>
@@ -107,7 +107,7 @@
                                                 style={hero.fillStyle}
                                             ></span>
                                         </span>
-                                        <span class="hero-progress__label">{hero.wins} / 15</span>
+                                        <span class="hero-progress__label">{hero.wins} / {heroWinsGoal}</span>
                                     </span>
                                 </template>
                             </td>

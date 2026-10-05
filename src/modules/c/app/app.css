@@ -64,7 +64,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0.6rem;
-    background: var(--slds-color-background-alt, #f3f2f1);
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
     border-radius: 0.3rem;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .recent__badge--muted {
-    color: #74685e;
+    color: var(--lwc-colorTextWeak, #74685e);
     background: rgba(116, 104, 94, 0.1);
 }
 
@@ -100,7 +100,7 @@
     object-fit: cover;
     border-radius: 0.25rem;
     flex: 0 0 auto;
-    background: #fff;
+    background: var(--lwc-colorBackground, #fff);
 }
 
 .recent__hero {

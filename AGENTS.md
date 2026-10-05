@@ -24,8 +24,10 @@ Deadlock ranked-eligibility tracker: a single-page LWC (Lightning Web Components
 ## Conventions
 
 - Component → component imports use `c/<name>`; imports of `src/services/` files from a component use a relative path (e.g. `../../../../services/deadlockApi.js`), since services are not LWC modules.
+- Services must **not import each other** with relative paths — LWR's bundler mis-resolves them (rebased onto the importing component's dir, e.g. `src/modules/c/app/services/…`). Share logic by passing functions/values from the component (see `getPlayerHeroStats(accountId, isScored)` + `src/services/outcomes.js`).
 - `bootstrap.syntheticShadow: true` in `lwr.config.json` is load-bearing for SLDS styling — don't remove it.
 - New routes or asset aliases are declared in `lwr.config.json`, not in code.
+- Theming: the app follows `prefers-color-scheme`. Dark mode works by overriding SLDS 2's global `--slds-g-*` tokens in `src/layouts/main.html` — new component CSS must use the `--lwc-*` theme variables (defined there), never hardcoded hex colors.
 
 ## Generated output — never hand-edit
 
@@ -42,4 +44,4 @@ Deadlock ranked-eligibility tracker: a single-page LWC (Lightning Web Components
 - `README.md` is leftover boilerplate (describes an `example/app` module and yarn). Trust `package.json` and `lwr.config.json` over it.
 - In `src/services/deadlockApi.js`, only `game_mode === 1` (Standard) matches count, and stats are aggregated from full match history on purpose — the API's `/hero-stats` endpoint only covers ~30 days. Don't "simplify" back to it.
 - Own-account match history (account id `199434043`) is served from `/data/match-history.json` — a host file refreshed out-of-band (every 10 min by a separate Rust poller) and mounted only in the Docker/nginx deployment. The poller `touch`es the remote file on every run even when content is unchanged, so the file mtime is a poller heartbeat and the staleness check in `deadlockApi.js` keys off it — don't "deduplicate" the touch away. Under `npm run dev` that path 404s and the app silently falls back to the public API; that's expected, not a bug to fix.
-- This directory is currently not a git repository.
+- Local git repo (branch `main`), not yet pushed to GitHub. Plan: create an empty **private** repo `deadlock-lwc` on github.com, then `git remote add origin git@github.com:<user>/deadlock-lwc.git && git push -u origin main`.

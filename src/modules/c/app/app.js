@@ -2,29 +2,15 @@ import { LightningElement, track } from 'lwc';
 import PlayerSearch from 'c/playerSearch';
 import HeroStats from 'c/heroStats';
 import { getHeroes, getPlayerHeroStats } from '../../../../services/deadlockApi.js';
+import {
+    RANKED_TOTAL_WINS,
+    RANKED_HEROES_NEEDED,
+    RANKED_HERO_WINS
+} from '../../../../services/constants.js';
+import { OUTCOME, isMatchWon, isMatchScored } from '../../../../services/outcomes.js';
 
 const STORAGE_KEY = 'deadlock.player';
-const RANKED_TOTAL_WINS = 60;
-const RANKED_HEROES_NEEDED = 3;
-const RANKED_HERO_WINS = 15;
 const ET_TIME_ZONE = 'America/New_York';
-
-// player_match_outcome: 0=invalid 1=win 2=loss 3=penalized 4=penalized party 5=not scored
-const OUTCOME = { INVALID: 0, WIN: 1, PENALIZED: 3, PENALIZED_PARTY: 4, NOT_SCORED: 5 };
-
-function isMatchWon(m) {
-    const o = m.player_match_outcome;
-    if (o === undefined || o === null || o === OUTCOME.INVALID) {
-        return m.match_result === m.player_team;
-    }
-    return o === OUTCOME.WIN;
-}
-
-function isMatchScored(m) {
-    const o = m.player_match_outcome;
-    if (o === undefined || o === null) return true;
-    return o !== OUTCOME.PENALIZED && o !== OUTCOME.PENALIZED_PARTY && o !== OUTCOME.NOT_SCORED;
-}
 
 function matchOutcomeLabel(m) {
     const o = m.player_match_outcome;
@@ -60,17 +46,20 @@ function matchModeLabel(mode) {
 
 // Formats a Unix timestamp (seconds) as a wall-clock date/time in Eastern time.
 // The IANA zone handles the EDT/EST daylight-saving switch automatically.
+// The formatter is built once — Intl.DateTimeFormat construction is not free.
+const ET_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_TIME_ZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+});
+
 function formatEt(timestamp) {
     try {
-        return new Intl.DateTimeFormat('en-US', {
-            timeZone: ET_TIME_ZONE,
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short'
-        }).format(new Date(timestamp * 1000));
+        return ET_FORMATTER.format(new Date(timestamp * 1000));
     } catch {
         return new Date(timestamp * 1000).toString();
     }
@@ -106,6 +95,10 @@ export default class App extends LightningElement {
     get isEligible() {
         if (!this.stats) return false;
         return this.stats.totalWins >= RANKED_TOTAL_WINS && this.stats.eligibleCount >= RANKED_HEROES_NEEDED;
+    }
+
+    get eligibilityRule() {
+        return `${RANKED_TOTAL_WINS} total Standard wins + ${RANKED_HEROES_NEEDED} heroes with ${RANKED_HERO_WINS}+ wins`;
     }
 
     get playerInitials() {
@@ -214,7 +207,7 @@ export default class App extends LightningElement {
                 rateLimited,
                 source,
                 localUpdated: localFileUpdated,
-            } = await getPlayerHeroStats(this.player.accountId);
+            } = await getPlayerHeroStats(this.player.accountId, isMatchScored);
             if (seq !== this.loadSeq) return; // superseded (switch/refresh) — drop stale data
             this.stats = this.computeStats(heroStats);
             this.recentMatches = this.computeRecentMatches(recentMatches);

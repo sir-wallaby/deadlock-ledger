@@ -1,6 +1,9 @@
 import { LightningElement, api } from 'lwc';
-
-const RANKED_TOTAL = 60;
+import {
+    RANKED_TOTAL_WINS,
+    RANKED_HEROES_NEEDED,
+    RANKED_HERO_WINS
+} from '../../../../services/constants.js';
 
 export default class HeroStats extends LightningElement {
     @api stats;
@@ -29,8 +32,30 @@ export default class HeroStats extends LightningElement {
         return this.stats ? this.stats.rows : [];
     }
 
+    // Template can't mix text and expressions inside attribute values, so
+    // header/label strings are composed here from the shared constants.
+    get totalWinsGoal() {
+        return RANKED_TOTAL_WINS;
+    }
+
+    get heroesNeeded() {
+        return RANKED_HEROES_NEEDED;
+    }
+
+    get heroWinsGoal() {
+        return RANKED_HERO_WINS;
+    }
+
+    get rankedHeader() {
+        return `Ranked (${RANKED_HERO_WINS})`;
+    }
+
+    get rankedColumnTitle() {
+        return `Ranked (${RANKED_HERO_WINS} wins)`;
+    }
+
     get totalWinsPct() {
-        return Math.min(100, Math.round((this.totalWins / RANKED_TOTAL) * 100));
+        return Math.min(100, Math.round((this.totalWins / RANKED_TOTAL_WINS) * 100));
     }
 
     get statusVariant() {
