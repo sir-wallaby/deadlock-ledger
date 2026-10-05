@@ -8,7 +8,7 @@
 //!           write a JSON array in the same shape as
 //!           api.deadlock-api.com /v1/players/{id}/match-history. Skips the
 //!           write if the existing file already has identical content.
-//!   check   Like fetch, but writes to /dev/null (sanity check).
+//!   check   Like fetch, but discards the output (sanity check).
 //!   status  Show config and refresh-token state.
 
 use std::collections::HashSet;
@@ -200,7 +200,7 @@ async fn connect_gc(cfg: &Config) -> Result<steam_vent::Connection> {
     Ok(conn)
 }
 
-async fn fetch_matches(cfg: &Config, out: Option<PathBuf>) -> Result<()> {
+async fn fetch_matches(cfg: &Config, out: Option<PathBuf>, write: bool) -> Result<()> {
     let conn = connect_gc(cfg).await?;
     let (gc, _welcome) = conn
         .game_coordinator(&DeadlockGCHandshake::default())
@@ -210,6 +210,7 @@ async fn fetch_matches(cfg: &Config, out: Option<PathBuf>) -> Result<()> {
 
     let mut all: Vec<Match> = Vec::new();
     let mut cursor: u64 = 0;
+    let mut done = false;
     for page in 0..MAX_PAGES {
         let req = CMsgClientToGCGetMatchHistory {
             account_id: Some(cfg.account32()),
@@ -230,10 +231,14 @@ async fn fetch_matches(cfg: &Config, out: Option<PathBuf>) -> Result<()> {
         all.extend(rsp.matches);
         eprintln!("page {page}: {page_len} matches (cursor {cursor} -> {next})");
         if page_len == 0 || next == 0 || next == cursor {
+            done = true;
             break;
         }
         cursor = next;
         tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    if !done {
+        eprintln!("warning: stopped at the {MAX_PAGES}-page limit — history may be truncated");
     }
 
     all.sort_by_key(|m| std::cmp::Reverse(m.start_time()));
@@ -246,7 +251,6 @@ async fn fetch_matches(cfg: &Config, out: Option<PathBuf>) -> Result<()> {
     }
 
     let json = serde_json::to_string_pretty(&rows)?;
-    let out_path = out.unwrap_or_else(|| data_dir().join("match-history.json"));
     if let Some(newest) = rows.first() {
         eprintln!(
             "total: {} matches, newest: {} (match {})",
@@ -255,9 +259,11 @@ async fn fetch_matches(cfg: &Config, out: Option<PathBuf>) -> Result<()> {
             newest.match_id
         );
     }
-    if out_path.as_os_str() == "/dev/null" {
+    if !write {
+        // `check` mode: the round trip succeeded, discard the output.
         return Ok(());
     }
+    let out_path = out.unwrap_or_else(|| data_dir().join("match-history.json"));
     if let Ok(existing) = fs::read(&out_path) {
         if existing.as_slice() == json.as_bytes() {
             eprintln!("unchanged — skipped write to {}", out_path.display());
@@ -387,24 +393,33 @@ fn arg_after(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
+fn parse_steam64(args: &[String]) -> Option<u64> {
+    match arg_after(args, "--steam64") {
+        Some(v) => match v.parse() {
+            Ok(n) => Some(n),
+            Err(_) => {
+                eprintln!("warning: ignoring invalid --steam64 value '{v}'");
+                None
+            }
+        },
+        None => None,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("login") => {
-            run_login(
-                arg_after(&args, "--account").as_deref(),
-                arg_after(&args, "--steam64").and_then(|v| v.parse().ok()),
-            )
-            .await
+            run_login(arg_after(&args, "--account").as_deref(), parse_steam64(&args)).await
         }
         Some("fetch") => {
             let cfg = Config::load()?;
-            fetch_matches(&cfg, arg_after(&args, "--out").map(PathBuf::from)).await
+            fetch_matches(&cfg, arg_after(&args, "--out").map(PathBuf::from), true).await
         }
         Some("check") => {
             let cfg = Config::load()?;
-            fetch_matches(&cfg, Some(PathBuf::from("/dev/null"))).await
+            fetch_matches(&cfg, None, false).await
         }
         Some("status") => run_status(),
         _ => {

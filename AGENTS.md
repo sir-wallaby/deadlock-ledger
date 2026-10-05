@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Single-binary Rust CLI (edition 2021). Fetches own-account Deadlock (Steam appid 1422450) match history directly from the Steam Game Coordinator (GC message 9112), bypassing third-party APIs. No tests, no CI, no lint config, not a git repo. All app code is in `src/main.rs`.
+Single-binary Rust CLI (edition 2021). Fetches own-account Deadlock (Steam appid 1422450) match history directly from the Steam Game Coordinator (GC message 9112), bypassing third-party APIs. No tests, no CI, no lint config. Local git repo (branch `main`), not yet pushed — plan: create an empty **private** GitHub repo `deadlock-gc-history`, then `git remote add origin git@github.com:<user>/deadlock-gc-history.git && git push -u origin main`. All app code is in `src/main.rs`.
 
 ## Build & run
 
