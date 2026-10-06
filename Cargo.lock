@@ -2260,7 +2260,6 @@ dependencies = [
 [[package]]
 name = "steam-vent-proto-deadlock"
 version = "0.1.0"
-source = "git+https://codeberg.org/steam-vent/proto-deadlock#02dadfa0a111e0f42b56cf2b7e53f8117a67c82b"
 dependencies = [
  "steam-vent-proto-common",
 ]

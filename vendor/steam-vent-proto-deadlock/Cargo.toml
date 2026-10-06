@@ -1,0 +1,12 @@
+[package]
+name = "steam-vent-proto-deadlock"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75.0"
+description = "Protobuf structs used by the Steam client protocol"
+authors = ["newt <hi@newty.dev>"]
+license = "MIT"
+repository = "https://codeberg.org/newt/proto-deadlock"
+
+[dependencies]
+steam-vent-proto-common = "0.5.1"
