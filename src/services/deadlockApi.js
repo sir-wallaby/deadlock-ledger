@@ -98,9 +98,10 @@ export async function getPlayerHeroStats(accountId, {
                             if (!m) continue;
                             const existing = localById.get(m.match_id);
                             if (existing) {
-                                // The GC only synthesizes win/loss outcomes;
-                                // when the API has the real one (e.g. 3/4
-                                // penalized, 5 not-scored), prefer it.
+                                // The GC sends the real outcome enum but leaves
+                                // it unset (0) for some matches (e.g. beta-era
+                                // ones); when the API has the real value,
+                                // prefer it.
                                 if (m.player_match_outcome) {
                                     existing.player_match_outcome = m.player_match_outcome;
                                 }
