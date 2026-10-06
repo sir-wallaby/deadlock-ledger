@@ -86,11 +86,11 @@ impl Config {
 
 /// JSON row mirroring the api.deadlock-api.com match-history shape.
 ///
-/// `player_match_outcome` is synthesized as 1 (win) / 2 (loss) from
-/// `match_result == player_team`. The vendored protos predate the ranked
-/// season, so the real outcome enum (incl. 3/4 penalized, 5 not-scored) and
-/// the ranked_* fields are not available; the app only needs W/L for its
-/// badges and stats.
+/// `player_match_outcome` is synthesized: the proto exposes no outcome enum,
+/// only a `not_scored` flag (set when the player quit or the match otherwise
+/// doesn't count) — that maps to 5 (not-scored); otherwise 1 (win) / 2
+/// (loss) from `match_result == player_team`. The penalized values (3/4) are
+/// not distinguishable from the GC and stay the app's problem.
 #[derive(Serialize)]
 struct MatchOut {
     match_id: u64,
@@ -128,6 +128,7 @@ fn to_json(m: &Match, account32: u32) -> MatchOut {
     let player_team = enum_val(&m.player_team) as u32;
     let match_result = m.match_result();
     let won = match_result == player_team;
+    let player_match_outcome = if m.not_scored() { 5 } else if won { 1 } else { 2 };
     MatchOut {
         match_id: m.match_id(),
         hero_id: m.hero_id(),
@@ -152,7 +153,7 @@ fn to_json(m: &Match, account32: u32) -> MatchOut {
         brawl_score_team0: m.brawl_score_team0(),
         brawl_score_team1: m.brawl_score_team1(),
         brawl_avg_round_time_s: m.brawl_avg_round_time_s(),
-        player_match_outcome: if won { 1 } else { 2 },
+        player_match_outcome,
         account_id: account32,
     }
 }

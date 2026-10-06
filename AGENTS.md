@@ -28,7 +28,7 @@ cargo clippy --all-targets   # keep at zero warnings (default lints)
 ## Vendored dependencies — read before touching Steam protocol code
 
 - `vendor/steam-vent` is a **path dependency vendored in-repo** (not a git submodule). If Steam client behavior is wrong, edit it there.
-- `steam-vent-proto-deadlock` comes from a **git dependency** (codeberg). Its protos predate the ranked season: no `ranked_*` fields, no penalized/not-scored outcome enum values. `player_match_outcome` is synthesized as 1 (win) / 2 (loss) in `src/main.rs` — don't "fix" it against the newer public API unless the proto dep is updated.
+- `steam-vent-proto-deadlock` comes from a **git dependency** (codeberg). Its protos predate the ranked season: no `ranked_*` fields, no penalized/not-scored outcome enum values. `player_match_outcome` is synthesized in `src/main.rs`: the proto's `not_scored` flag (set when the player quit / the match doesn't count) maps to 5, otherwise 1 (win) / 2 (loss) from the team comparison. Note: as of Oct 2026 the GC returns `not_scored=false` for **all** matches (the server doesn't populate it), so quit detection from the GC is currently impossible — the game's own counter knows more than the GC exposes. Don't "fix" the synthesis against the newer public API unless the proto dep is updated.
 
 ## Output contract
 
