@@ -194,6 +194,12 @@ impl GameCoordinator {
         .await
         .map_err(|_| NetworkError::EOF)
     }
+
+    /// Unsolicited messages that arrived without a registered receiver
+    /// (e.g. SO cache pushes that beat a late subscription).
+    pub fn unprocessed(&self) -> Vec<RawNetMessage> {
+        self.filter.unprocessed()
+    }
 }
 
 impl ConnectionImpl for GameCoordinator {
