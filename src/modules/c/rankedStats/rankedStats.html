@@ -1,0 +1,164 @@
+<template>
+    <template if:true={show}>
+        <section class="rank-card slds-box slds-m-bottom_medium">
+            <div class="rank-card__row">
+                <div class="rank-card__badge">
+                    <template if:true={rankInfo.icon}>
+                        <div class="rank-card__shield">
+                            <img src={rankInfo.icon} alt={rankInfo.name} class="rank-card__icon" />
+                            <span class="rank-card__numeral">{rankInfo.numeral}</span>
+                        </div>
+                    </template>
+                    <template if:false={rankInfo.icon}>
+                        <div class="rank-card__unranked">{rankInfo.name}</div>
+                    </template>
+                </div>
+                <div class="rank-card__main">
+                    <div class="rank-card__title">{rankTitle}</div>
+                    <template if:true={points}>
+                        <div class="rank-card__points">
+                            <div class="rank-card__points-label">
+                                {points.value} / {points.max} ranked points
+                            </div>
+                            <div class="rank-card__points-track">
+                                <div class="rank-card__points-fill" style={pointsFillStyle}></div>
+                            </div>
+                        </div>
+                    </template>
+                    <div class="rank-card__chips">
+                        <template if:true={showCalibChip}>
+                            <span class="chip">Calibration {calibCount}/{calibrationTotal}</span>
+                        </template>
+                        <template if:true={shieldUsed}>
+                            <span class="chip chip--shield">Shield used</span>
+                        </template>
+                        <span class="chip chip--form">
+                            <span class="chip__label">Form</span>
+                            <template for:each={form} for:item="f">
+                                <span key={f.i} class={f.cls}>{f.label}</span>
+                            </template>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    
+        <section class="chart-card slds-box slds-m-bottom_medium">
+            <h2 class="chart-card__title slds-text-heading_small">Rank history — this season</h2>
+            <template if:true={chart}>
+                <svg
+                    class="chart-card__svg"
+                    viewBox={chart.viewBox}
+                    xmlns="http://www.w3.org/2000/svg"
+                    role="img"
+                    aria-label="Ranked badge history"
+                >
+                    <template if:true={chart.calibBand}>
+                        <rect
+                            x={chart.calibBand.x}
+                            y={chart.padT}
+                            width={chart.calibBand.w}
+                            height={chart.plotH}
+                            class="chart__calib"
+                        ></rect>
+                        <text x={chart.padL} y={chart.calibLabelY} class="chart__calib-label">Calibration</text>
+                    </template>
+                    <template for:each={chart.gridlines} for:item="g">
+                        <g key={g.key}>
+                            <line
+                                x1={chart.padL}
+                                x2={chart.plotRight}
+                                y1={g.y}
+                                y2={g.y}
+                                class="chart__grid"
+                            ></line>
+                            <text x={chart.labelX} y={g.labelY} class="chart__grid-label">{g.label}</text>
+                        </g>
+                    </template>
+                    <polyline points={chart.polyline} class="chart__line"></polyline>
+                    <template for:each={chart.points} for:item="p">
+                        <circle key={p.i} cx={p.x} cy={p.y} r={chart.dot} class={p.cls}>
+                            <title>{p.tooltip}</title>
+                        </circle>
+                    </template>
+                </svg>
+            </template>
+            <template if:false={chart}>
+                <p class="chart-card__none">No rank data for this season yet.</p>
+            </template>
+        </section>
+    
+        <template if:true={showMmr}>
+            <section class="mmr-card slds-box slds-m-bottom_medium">
+                <h2 class="mmr-card__title slds-text-heading_small">Hero MMR</h2>
+                <div class="mmr-card__list">
+                    <template for:each={mmrHeroes} for:item="h">
+                        <div key={h.id} class="mmr-card__item">
+                            <img src={h.icon} alt="" class="mmr-card__icon" />
+                            <span class="mmr-card__name slds-truncate" title={h.name}>{h.name}</span>
+                            <span class={h.cls}>{h.value}</span>
+                        </div>
+                    </template>
+                </div>
+            </section>
+        </template>
+    
+        <section class="ranked-heroes slds-m-bottom_medium">
+            <h2 class="ranked-heroes__title slds-text-heading_small">Ranked heroes — this season</h2>
+            <div class="table-wrap slds-table_container--base">
+                <table class="slds-table slds-table--bordered slds-table--fixed ranked-heroes__table">
+                    <thead>
+                        <tr>
+                            <th scope="col">
+                                <span class="slds-truncate" title="Hero">Hero</span>
+                            </th>
+                            <th scope="col">
+                                <span class="slds-truncate" title="Wins - Losses">W-L</span>
+                            </th>
+                            <th scope="col">
+                                <span class="slds-truncate" title="Win rate">Win %</span>
+                            </th>
+                            <th scope="col">
+                                <span class="slds-truncate" title="Kills / Deaths / Assists">K / D / A</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={heroRows} for:item="h">
+                            <tr key={h.heroId}>
+                                <th scope="row" class="ranked-heroes__hero">
+                                    <span class="hero-cell">
+                                        <img src={h.icon} alt="" class="hero-icon" />
+                                        <span class="slds-truncate" title={h.name}>{h.name}</span>
+                                    </span>
+                                </th>
+                                <td data-label="W-L">
+                                    <strong>{h.record}</strong>
+                                </td>
+                                <td data-label="Win rate">{h.winRate}%</td>
+                                <td data-label="K / D / A">{h.kda}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    
+        <section class="ranked-recent slds-m-bottom_medium">
+            <h2 class="ranked-recent__title slds-text-heading_small">
+                Recent ranked <span class="ranked-recent__tz">(Eastern time)</span>
+            </h2>
+            <ul class="ranked-recent__list">
+                <template for:each={recent} for:item="m">
+                    <li key={m.key} class="ranked-recent__item">
+                        <span class={m.badgeClass}>{m.label}</span>
+                        <img src={m.icon} alt="" class="ranked-recent__icon" />
+                        <span class="ranked-recent__name slds-truncate" title={m.name}>{m.name}</span>
+                        <span class="ranked-recent__delta">{m.delta}</span>
+                        <span class="ranked-recent__when">{m.when}</span>
+                    </li>
+                </template>
+            </ul>
+        </section>
+    </template>
+</template>

@@ -1,15 +1,18 @@
 import { LightningElement, track } from 'lwc';
-import PlayerSearch from 'c/playerSearch';
 import HeroStats from 'c/heroStats';
-import { getHeroes, getPlayerHeroStats } from '../../../../services/deadlockApi.js';
+import RankedStats from 'c/rankedStats';
 import {
-    RANKED_TOTAL_WINS,
-    RANKED_HEROES_NEEDED,
-    RANKED_HERO_WINS
-} from '../../../../services/constants.js';
+    LOCAL_ACCOUNT_ID,
+    getPlayerHeroStats,
+    getLocalRankedData
+} from '../../../../services/deadlockApi.js';
+import heroes from '../../../../services/heroes.js';
+import { SEASONS } from '../../../../services/constants.js';
 import { OUTCOME, isMatchWon, isMatchScored } from '../../../../services/outcomes.js';
 
-const STORAGE_KEY = 'deadlock.player';
+// Single-account dashboard: the GC poller serves this account's data, so the
+// app is pinned to it (no search, no player persistence).
+const OWN_PLAYER = { accountId: LOCAL_ACCOUNT_ID, personaname: 'Wallaby32' };
 const ET_TIME_ZONE = 'America/New_York';
 
 function matchOutcomeLabel(m) {
@@ -65,8 +68,26 @@ function formatEt(timestamp) {
     }
 }
 
+// Season boundaries are UTC instants; the date alone is what gets shown.
+const UTC_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+});
+
+function formatUtcDate(ms) {
+    try {
+        return UTC_DATE_FORMATTER.format(new Date(ms));
+    } catch {
+        return '';
+    }
+}
+
 export default class App extends LightningElement {
-    @track player = null;
+    // Set at construction (not in connectedCallback) so the template can
+    // reference player.* unconditionally on the very first render.
+    @track player = OWN_PLAYER;
     @track stats = null;
     loading = false;
     refreshing = false;
@@ -77,28 +98,23 @@ export default class App extends LightningElement {
     dataSource = 'api';
     localFileUpdated = null;
     @track recentMatches = [];
+    @track rankedMatches = [];
+    @track localRanked = null;
 
-    heroMap = new Map();
+    // Static: hero metadata is player-independent and a local snapshot now.
+    heroMap = new Map(heroes.map((h) => [h.id, h]));
 
-    // Monotonic id for in-flight loads; lets a stale response (e.g. a refresh
-    // for the previous player) discard itself instead of overwriting newer state.
+    // Monotonic id for in-flight loads; lets a stale refresh discard itself
+    // instead of overwriting newer state.
     loadSeq = 0;
 
-    get showSearch() {
-        return !this.player;
+    get seasonLine() {
+        const season = SEASONS[SEASONS.length - 1];
+        return `${season.name} · ends ${formatUtcDate(season.end)}`;
     }
 
-    get showContent() {
-        return !!this.player;
-    }
-
-    get isEligible() {
-        if (!this.stats) return false;
-        return this.stats.totalWins >= RANKED_TOTAL_WINS && this.stats.eligibleCount >= RANKED_HEROES_NEEDED;
-    }
-
-    get eligibilityRule() {
-        return `${RANKED_TOTAL_WINS} total Standard wins + ${RANKED_HEROES_NEEDED} heroes with ${RANKED_HERO_WINS}+ wins`;
+    get showRanked() {
+        return Array.isArray(this.rankedMatches) && this.rankedMatches.length > 0;
     }
 
     get playerInitials() {
@@ -131,61 +147,12 @@ export default class App extends LightningElement {
         return Array.isArray(this.recentMatches) && this.recentMatches.length > 0;
     }
 
-    async handleConfirm(event) {
-        this.player = event.detail;
-        this.stats = null;
-        this.error = null;
-        this.persist();
-        await this.loadData(true);
-    }
-
-    handleSwitch() {
-        this.loadSeq += 1; // invalidate any in-flight load
-        this.player = null;
-        this.stats = null;
-        this.recentMatches = [];
-        this.error = null;
-        this.loading = false;
-        this.refreshing = false;
-        this.lastUpdated = null;
-        this.clearPersist();
-    }
-
     handleRefresh() {
         this.loadData(false);
     }
 
-    persist() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.player));
-        } catch {
-            /* ignore */
-        }
-    }
-
-    clearPersist() {
-        try {
-            localStorage.removeItem(STORAGE_KEY);
-        } catch {
-            /* ignore */
-        }
-    }
-
-    readPersist() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch {
-            return null;
-        }
-    }
-
     connectedCallback() {
-        const saved = this.readPersist();
-        if (saved && saved.accountId) {
-            this.player = saved;
-            this.loadData(true);
-        }
+        this.loadData(true);
     }
 
     async loadData(isInitial) {
@@ -194,35 +161,32 @@ export default class App extends LightningElement {
         if (isInitial) this.loading = true;
         else this.refreshing = true;
         try {
-            if (!this.heroMap.size) {
-                // Hero metadata is player-independent, so cache it even if this
-                // load is superseded before the fetch resolves.
-                const heroes = await getHeroes();
-                this.heroMap = new Map(heroes.map((h) => [h.id, h]));
-            }
-            const {
-                stats: heroStats,
-                recentMatches,
-                fresh,
-                rateLimited,
-                source,
-                localUpdated: localFileUpdated,
-            } = await getPlayerHeroStats(this.player.accountId, {
-                isScored: isMatchScored,
-                isWon: isMatchWon
-            });
-            if (seq !== this.loadSeq) return; // superseded (switch/refresh) — drop stale data
-            this.stats = this.computeStats(heroStats);
-            this.recentMatches = this.computeRecentMatches(recentMatches);
-            this.dataFresh = fresh;
-            this.rateLimited = rateLimited;
-            this.dataSource = source;
-            this.localFileUpdated = localFileUpdated;
+            // Local ranked state is own-account only and 404-tolerant; it
+            // degrades to null (no points bar / MMR strip) rather than failing
+            // the load, so it runs alongside the stats fetch.
+            const [result, localRanked] = await Promise.all([
+                getPlayerHeroStats(this.player.accountId, {
+                    isScored: isMatchScored,
+                    isWon: isMatchWon
+                }),
+                getLocalRankedData(this.player.accountId)
+            ]);
+            if (seq !== this.loadSeq) return; // superseded by a refresh — drop stale data
+            this.stats = this.computeStats(result.stats);
+            this.rankedMatches = result.rankedMatches || [];
+            this.localRanked = localRanked;
+            this.recentMatches = this.computeRecentMatches(result.recentMatches);
+            this.dataFresh = result.fresh;
+            this.rateLimited = result.rateLimited;
+            this.dataSource = result.source;
+            this.localFileUpdated = result.localUpdated;
             this.lastUpdated = new Date().toLocaleString();
         } catch (e) {
             if (seq !== this.loadSeq) return;
             this.error = (e && e.message) || 'Failed to load stats';
             this.stats = null;
+            this.rankedMatches = [];
+            this.localRanked = null;
             this.recentMatches = [];
             this.dataFresh = true;
             this.rateLimited = false;
@@ -244,7 +208,6 @@ export default class App extends LightningElement {
                 const images = meta.images || {};
                 const wins = h.wins || 0;
                 const matches = h.matches_played || 0;
-                const eligible = wins >= RANKED_HERO_WINS;
                 return {
                     heroId: h.hero_id,
                     name: meta.name || `Hero ${h.hero_id}`,
@@ -255,18 +218,20 @@ export default class App extends LightningElement {
                     kills: h.kills || 0,
                     deaths: h.deaths || 0,
                     assists: h.assists || 0,
-                    winRate: matches ? Math.round((wins / matches) * 100) : 0,
-                    eligible,
-                    rowClass: 'hero-row' + (eligible ? ' hero-row--eligible' : ''),
-                    fillStyle: `width: ${Math.min(100, Math.round((wins / RANKED_HERO_WINS) * 100))}%`,
+                    winRate: matches ? Math.round((wins / matches) * 100) : 0
                 };
             })
             .sort((a, b) => b.wins - a.wins || b.matches - a.matches);
 
         const totalWins = heroStats.reduce((s, h) => s + (h.wins || 0), 0);
         const totalMatches = heroStats.reduce((s, h) => s + (h.matches_played || 0), 0);
-        const eligibleCount = rows.filter((r) => r.eligible).length;
-        return { rows, totalWins, totalMatches, eligibleCount, empty: totalMatches === 0 };
+        return {
+            rows,
+            totalWins,
+            totalMatches,
+            winRate: totalMatches ? Math.round((totalWins / totalMatches) * 100) : 0,
+            empty: totalMatches === 0
+        };
     }
 
     computeRecentMatches(rawMatches) {
