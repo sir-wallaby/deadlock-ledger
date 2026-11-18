@@ -1,0 +1,120 @@
+{
+  "nodes": {
+    "crane": {
+      "locked": {
+        "lastModified": 1756705356,
+        "narHash": "sha256-dpBFe8SqYKr7W6KN5QOVCr8N76SBKwTslzjw+4BVBVs=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "305707bbc27d83aa1039378e91d7dd816f4cac10",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
+    "flakelight": {
+      "inputs": {
+        "nixpkgs": ["nixpkgs"]
+      },
+      "locked": {
+        "lastModified": 1756730985,
+        "narHash": "sha256-Uv5lLUZfFxQv6RHi1TqLTKso0j0eUVMQQwud29LTV/s=",
+        "owner": "nix-community",
+        "repo": "flakelight",
+        "rev": "950121d809b75c32e73684b32ccba8d4e8a67703",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "flakelight",
+        "type": "github"
+      }
+    },
+    "mill-scale": {
+      "inputs": {
+        "crane": "crane",
+        "flakelight": ["flakelight"],
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1760882274,
+        "narHash": "sha256-po7/m24K3fmeVE/C7KOVwYoM+78E186IspCRfH/4rqg=",
+        "ref": "refs/heads/main",
+        "rev": "a97ecc52130b0ca922f6cd0fa1aebc14212d2a70",
+        "revCount": 63,
+        "type": "git",
+        "url": "https://codeberg.org/icewind/mill-scale.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://codeberg.org/icewind/mill-scale.git"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1757020766,
+        "narHash": "sha256-PLoSjHRa2bUbi1x9HoXgTx2AiuzNXs54c8omhadyvp0=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "fe83bbdde2ccdc2cb9573aa846abe8363f79a97a",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "nixos-25.05",
+        "type": "indirect"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flakelight": "flakelight",
+        "mill-scale": "mill-scale",
+        "nixpkgs": "nixpkgs",
+        "steam-vent": "steam-vent"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": ["mill-scale", "flakelight", "nixpkgs"]
+      },
+      "locked": {
+        "lastModified": 1757039615,
+        "narHash": "sha256-qm53+EUFfzyF8F0MEscHGqf9tx462GV3/zUZrn9wiQU=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "4486e04adbb4b0e39f593767f2c36e2211003d01",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "steam-vent": {
+      "inputs": {
+        "flakelight": ["flakelight"],
+        "mill-scale": ["mill-scale"],
+        "nixpkgs": ["nixpkgs"]
+      },
+      "locked": {
+        "lastModified": 1757192559,
+        "narHash": "sha256-6hkW2wRJ74uCIHlA7wXsSyiGVnZVYUsQJJvZ2HmH6iQ=",
+        "ref": "refs/heads/main",
+        "rev": "c03aa0f82cd4a4bccd55de13696f8fd9bffaf2bb",
+        "revCount": 210,
+        "type": "git",
+        "url": "https://codeberg.org/steam-vent/steam-vent.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://codeberg.org/steam-vent/steam-vent.git"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
