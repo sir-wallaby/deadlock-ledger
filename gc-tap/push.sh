@@ -8,7 +8,7 @@
 #   hero-mmr.json       per-hero relative MMR (GetHeroMMRRankings)
 set -eu
 
-BIN=/home/wtaylor/Repo/deadlock-gc-history/target/release/deadlock-gc-history
+BIN=/home/wtaylor/Repo/deadlock-ledger/gc-tap/target/release/deadlock-gc-history
 DATA_DIR="$HOME/.local/share/deadlock-gc-history"
 REMOTE="wtaylor-deb"
 REMOTE_DIR="$HOME/deadlock-lwc-data"

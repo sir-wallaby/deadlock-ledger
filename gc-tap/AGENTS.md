@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Single-binary Rust CLI (edition 2021). Fetches own-account Deadlock (Steam appid 1422450) match history directly from the Steam Game Coordinator (GC message 9112), bypassing third-party APIs. No tests, no CI, no lint config. Local git repo (branch `main`), not yet pushed — plan: create an empty **private** GitHub repo `deadlock-gc-history`, then `git remote add origin git@github.com:<user>/deadlock-gc-history.git && git push -u origin main`. All app code is in `src/main.rs`.
+Single-binary Rust CLI (edition 2021). Fetches own-account Deadlock (Steam appid 1422450) match history directly from the Steam Game Coordinator (GC message 9112), bypassing third-party APIs. No tests, no CI, no lint config. Lives in the `deadlock-ledger` monorepo as the `gc-tap/` subtree (branch `main`); the frontend is the sibling `deadlock-lwc/` subtree. All app code is in `src/main.rs`.
 
 ## Build & run
 
@@ -28,7 +28,7 @@ cargo clippy --all-targets   # keep at zero warnings (default lints)
 ## Vendored dependencies — read before touching Steam protocol code
 
 - `vendor/steam-vent` is a **path dependency vendored in-repo** (not a git submodule). If Steam client behavior is wrong, edit it there.
-- `vendor/steam-vent-proto-deadlock` is also **vendored in-repo** (path dependency). The codeberg git dep it was copied from is stale (predates the ranked season), so the 10 `citadel_*.proto` + `base_*.proto` files were swapped for current-game dumps from <https://github.com/SteamTracking/Protobufs> and `src/generated/` regenerated with `steam-vent-proto-build` (see the vendored crate's README for the exact procedure, incl. stripping the dumper-metadata options the parser rejects).
+- `vendor/steam-vent-proto-deadlock` is also **vendored in-repo** (path dependency). The codeberg git dep it was copied from is stale (predates the ranked season), so the 10 `citadel_*.proto` + `base_*.proto` files were swapped for current-game dumps from <https://github.com/SteamTracking/Protobufs> and the crate's `src/generated/` regenerated with `steam-vent-proto-build` (see the vendored crate's README for the exact procedure, incl. stripping the dumper-metadata options the parser rejects).
 - `player_match_outcome` is now the GC's **real outcome enum** (0=invalid, 1=win, 2=loss, 3=penalized, 4=penalized party, 5=not-scored), mapped straight from the proto in `src/main.rs`. When the server leaves it unset (0 — e.g. beta-era matches) it falls back to 1/2 from the team comparison. This is what let the app's win counts match the in-game counter exactly (a penalized Lady Geist match the old proto hid as a win was the 1-match delta).
 
 ## Output contract
@@ -53,7 +53,49 @@ The 5 ranked fields on `MatchOut` (`ranked_display_badge`, `ranked_delta`, `rank
 
 **Live-verified SO type ids** (kind-24 push): 104 = CSORankedProgress (1 object), 107 = per-hero MMR (41 objects), 7 and 112 = other account SOs.
 
-**SO semantics are only partially understood — re-verify after the next ranked match** before adding UI: `last_match_*` (outcome=1, KDA 0/3/24, no hero) matches **no** match in the 233-match history; `demote_protect_games` is a Unix timestamp (≈2026-09-11, stale-snapshot hint); `rank 19 / max_rank 2 / rank_interval 103 / win_bit_mask 0 / match_count 0` are unexplained; `rank_type 0` (enum only has Invalid/Normal).
+**SO semantics are only partially understood — re-verify after the next ranked match** before adding UI: `last_match_*` (outcome=1, KDA 0/3/24, no hero) matches **no** match in the full history; `demote_protect_games` is a Unix timestamp (≈2026-09-11, stale-snapshot hint); `rank 19 / max_rank 2 / rank_interval 103 / win_bit_mask 0 / match_count 0` are unexplained; `rank_type 0` (enum only has Invalid/Normal). The per-match `player_rank_data` in match metadata (see next section) partially untangles the shield/delta question.
+
+## GC message catalog + per-match metadata (investigated Nov 18 2026 — reference for frontend work)
+
+**Catalog**: `EGCCitadelClientMessages` (`citadel_gcmessages_client.proto:7`) defines all 180 GC type IDs (9010–9312); we use 3. Key unused **read** endpoints:
+
+| ID | Message | What it gives |
+|---|---|---|
+| 9167 | GetMatchMetaData | `{metadata_salt, replay_salt, replay_group_id, replay_valid_through}` — the key to per-match detail (below) |
+| 9164 | GetAccountStats | per-hero opaque `stat_id`/`total_value[]` pairs + medal counts (`CMsgAccountHeroStats`, common:821) |
+| 9024 | GetProfileCard | public card for any `account_id`: wins/kills/games, per-hero W/K, ranked badge |
+| 9236 / 9238 / 9293 | GetLeaderboard / GetAccountLeaderboards / GetLeaderboardStatus | regional boards (EU/Asia/NA/SA/Oceania), per-hero, eligibility |
+| 9311 / 9306 | CabalGetMatchHistory / CabalGetDetails | clan ("cabal") history + info |
+| 9186 / 9195 / 9213 / 9199 / 9280 / 9242 | GetBook / FindHeroBuilds / GetFriendGameStatus / GetAccountMatchReports / HeroReleaseVote / Tarot | cosmetics, community builds, friends' status, reports received, votes |
+| 9203 / 9291 / 9211 / 9172 / 9230–9233 | GetActiveMatches / dev + mod messages | live match list, dev/mod tools |
+
+**Per-match detail pipeline** (verified live Nov 18, own account, zero public API):
+
+```
+GC 9167 {match_id} → {metadata_salt, replay_salt, replay_group_id, replay_valid_through}
+HTTP GET http://replay{group}.valve.net/1422450/{match_id}_{metadata_salt}.meta.bz2   (no auth — the salt is the token)
+sniff magic bytes → zstd (recent matches) or bzip2 (old) despite the .bz2 extension
+→ CMsgMatchMetaData {version, match_details, match_id} → match_details = CMsgMatchMetaDataContents
+```
+
+- Our GC session returns the same `metadata_salt` the public API has, **plus** `replay_salt` (the API returned it null) — full `.dem.bz2` replays at `…/{match_id}_{replay_salt}.dem.bz2` are downloadable if ever needed.
+- `replay_valid_through` is **not** a hard expiry: a beta-era file (valid_through 2026-05-06) still downloads today.
+- The vendored protos decode files from both eras — schema stable across a year of game versions.
+- Rate limit: `k_eResult_RateLimited` exists; the ecosystem caps ~40 salt fetches/account/day. We'd do 1–3/day — back off politely.
+- Wiring it up needs new deps in `Cargo.toml`: `reqwest` (HTTP) + `zstd` + `bzip2` (there is no HTTP client today).
+
+**`CMsgMatchMetaDataContents`** (common:539) — what each file holds (~40–230 KB compressed):
+
+- **match**: duration, outcome, winning_team, `objectives[]` (destroy times + damage breakdown), mid_boss, pauses, pool flags, `ranked_type`/`rank_interval`, **`street_brawl_rounds[]`** (per-round duration + winner) + **`team_score[]`** (Brawl)
+- **`damage_matrix`**: 13 dealers (slots 0–12), 15 cumulative samples @180 s, broken down by ~391 damage sources (abilities, weapon sets, bullets, items) — "who hurt me with what"
+- **`match_paths`**: every player's movement sampled at 1 s with combat state
+- **per player (all 12)**: KDA, net_worth, last_hits, denies, lane, level, hero, **`death_details[]`** (time, TTK, killer, positions), **`items[]`** (full buy history incl. upgrades/imbues/sells), **`stats[]`** time series (dmg dealt / **dmg taken**, healing, accuracy, gold breakdown), pings, `ability_stats[]`, **`mvp_rank`** (top-3 only), **`accolades[]`** (25+ stat IDs), rewards, **`player_rank_data`**
+
+**Per-match rank data** (`CMsgMatchPlayerRankData`, common:528): `desired_progress_change` is the **raw MM delta pre-shield** (−350 both Nov 16/17); the history `ranked_delta` is the applied one (Nov 16: −150, shield absorbed 200, badge held at 26; Nov 17: −350, badge 26→25). Better source than the SO for shield/delta semantics — re-verify after the next ranked match before building rank UI off it.
+
+**Brawl**: `game_mode` 4 = StreetBrawl (enum: 1 Normal, 2 1v1Test, 3 Sandbox, 4 StreetBrawl, 5 ExploreNYC, 6 Internal); `match_mode` 8 = NewPlayerPlacement. The 9112 `Match` message already carries `brawl_score_team0/1` + `brawl_avg_round_time_s` — `MatchOut` already maps them (they're in the JSON, unused by the UI); the frontend `gameModeLabel` already labels 4 "Street Brawl". The user's oldest match (75793262) is a brawl: 8p, `team_score [3,1]`, 4 rounds, full per-player stats present.
+
+**Gotchas**: the `tracked_stats` arrays (player/team/match) are empty in normal ranked matches — teamfight % / CS score must be *computed* from `damage_matrix`/`stats`, not read off a flag. `average_badge_team0/1` = 0 in the user's ranked matches (untrusted).
 
 ## Deployment
 

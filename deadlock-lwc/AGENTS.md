@@ -4,7 +4,7 @@ Deadlock ranked-performance dashboard: a single-page LWC (Lightning Web Componen
 
 ## Commands
 
-- **npm, not yarn** — README's `yarn` instructions are stale boilerplate. Use `npm ci` / `npm install`.
+- **npm, not yarn** — use `npm ci` / `npm install`.
 - `npm run dev` — dev server at http://localhost:3000
 - `npm run build` — static build into `site/` (`lwr build --clean`)
 - `npm run start` — serve the built static site on port 3000
@@ -53,7 +53,6 @@ Deadlock ranked-performance dashboard: a single-page LWC (Lightning Web Componen
 
 ## Gotchas
 
-- `README.md` is leftover boilerplate (describes an `example/app` module and yarn). Trust `package.json` and `lwr.config.json` over it.
 - In `src/services/deadlockApi.js`, only `game_mode === 1` (Standard) matches count, and stats are aggregated from full match history on purpose — the API's `/hero-stats` endpoint only covers ~30 days. Don't "simplify" back to it.
 - Own-account match history (account id `199434043`) is served from `/data/match-history.json` — a host file refreshed out-of-band (every 10 min by the Rust poller) and mounted only in the Docker/nginx deployment. The poller `touch`es the remote file on every run even when content is unchanged, so the file mtime is a poller heartbeat and the staleness check in `deadlockApi.js` keys off it — don't "deduplicate" the touch away. Under `npm run dev` the `/data/` paths 404 and the app silently falls back to the public API (and to no points bar / MMR strip); that's expected, not a bug to fix.
 - **The GC sets the ranked fields only in an interval-scoped call**: `game_mode=Normal` + `match_mode=Ranked` + `rank_interval=<n>` all set together (a plain call leaves every `has_*` false — live-verified Nov 17 2026). The poller fires that call for the current season (`RANK_INTERVAL` in its `src/main.rs`, bumped per season) and coalesces the fields from the previously stored file for older seasons, never clearing stored values. So local rows carry the badges (the poller's job); the API merge in `deadlockApi.js` no longer backfills them — it only patches unset `player_match_outcome` values and appends the API-only beta-era matches. Don't re-add a ranked backfill from the API.
@@ -62,4 +61,4 @@ Deadlock ranked-performance dashboard: a single-page LWC (Lightning Web Componen
 - `rank-data.json` is flat JSON (top-level `progress`/`max_progress`/`rank`/…); `getLocalRankedData` wraps it as `{rank: <that object>, heroMmr}`, so component code reads `localRanked.rank.progress`. Don't "fix" the apparent double-naming.
 - Hero name lookups: `src/services/heroes.js` is the truth — a local snapshot of the API's `/assets/heroes` (fetched 2026-11-17, slimmed to id/name/hero_type/icon images; e.g. 4=Lady Geist, 7=Wraith, 19=Shiv, 52=Mirage, 63=Mina). Re-fetch from the API and re-slim if Valve adds or changes heroes. The component always resolves names through `heroMap` — never hardcode names.
 - `npm run build` never *executes* service modules — it only bundles them. A syntax/runtime error in one (e.g. a hand-generated data file) ships fine and dies as a white screen in the browser. After touching `src/services/`, sanity-check with `node -e "import('./src/services/<file>.js').then(m => console.log('ok'))"`; `hero_type` is a **string** (`mystic`, `brute`, …), a past generator emitted it unquoted.
-- Local git repo (branch `main`), not yet pushed to GitHub. Plan: create an empty **private** repo `deadlock-lwc` on github.com, then `git remote add origin git@github.com:<user>/deadlock-lwc.git && git push -u origin main`.
+- Lives in the `deadlock-ledger` monorepo as the `deadlock-lwc/` subtree (branch `main`); the backend is the sibling `gc-tap/` subtree.
