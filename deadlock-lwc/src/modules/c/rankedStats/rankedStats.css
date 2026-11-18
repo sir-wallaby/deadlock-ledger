@@ -1,0 +1,371 @@
+/* ---- Rank card ---- */
+
+.rank-card__row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.rank-card__badge {
+    flex: 0 0 auto;
+}
+
+.rank-card__shield {
+    position: relative;
+    width: 120px;
+}
+
+.rank-card__icon {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* The numeral sits on the badge's plain metal lower band. The badge is a
+   fixed-color image (identical in light/dark), so the overlay color is fixed
+   too — bright fill + dark halo reads on every rank's metal. */
+.rank-card__numeral {
+    position: absolute;
+    left: 50%;
+    top: 72%;
+    transform: translate(-50%, -50%);
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #f5f2ee;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+
+.rank-card__unranked {
+    width: 120px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--lwc-colorTextWeak, #74685e);
+    border: 2px dashed var(--lwc-colorBorder, #e5e5e5);
+    border-radius: 8px;
+}
+
+.rank-card__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--lwc-colorText, #181818);
+}
+
+.rank-card__points {
+    margin-top: 0.4rem;
+    max-width: 320px;
+}
+
+.rank-card__points-label {
+    font-size: 0.8rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+    margin-bottom: 0.2rem;
+}
+
+.rank-card__points-track {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--lwc-colorTrack, #ecebe9);
+    overflow: hidden;
+}
+
+.rank-card__points-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--lwc-colorPositive, #2e844a);
+}
+
+.rank-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
+    color: var(--lwc-colorTextWeak, #74685e);
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}
+
+.chip--shield {
+    color: var(--lwc-colorText, #181818);
+    border-color: var(--lwc-colorText, #181818);
+}
+
+.chip--form {
+    gap: 0.2rem;
+}
+
+.chip__label {
+    font-weight: 700;
+}
+
+.form__dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    border-radius: 4px;
+    color: var(--lwc-colorBackground, #ffffff);
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.form__dot--win {
+    background: var(--lwc-colorPositive, #2e844a);
+}
+
+.form__dot--loss {
+    background: var(--lwc-colorNegative, #ea001e);
+}
+
+/* ---- Badge chart ---- */
+
+.chart-card__title {
+    margin-bottom: 0.5rem;
+}
+
+.chart-card__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.chart__calib {
+    fill: var(--lwc-colorTrack, #ecebe9);
+    opacity: 0.6;
+}
+
+.chart__calib-label {
+    fill: var(--lwc-colorTextWeak, #74685e);
+    font-size: 9px;
+}
+
+.chart__grid {
+    stroke: var(--lwc-colorBorder, #e5e5e5);
+    stroke-width: 1;
+}
+
+.chart__grid-label {
+    fill: var(--lwc-colorTextWeak, #74685e);
+    font-size: 9px;
+}
+
+.chart__line {
+    fill: none;
+    stroke: var(--lwc-colorTextWeak, #74685e);
+    stroke-width: 1.5;
+    opacity: 0.5;
+}
+
+.chart__dot--win {
+    fill: var(--lwc-colorPositive, #2e844a);
+}
+
+.chart__dot--loss {
+    fill: var(--lwc-colorNegative, #ea001e);
+}
+
+.chart__dot--muted {
+    fill: var(--lwc-colorTextWeak, #74685e);
+    opacity: 0.5;
+}
+
+/* Unknown badge (GC row the API lacks): hollow, ring keeps the W/L color. */
+.chart__dot--unknown {
+    fill: var(--lwc-colorBackground, #ffffff);
+    stroke-width: 1.5;
+}
+
+.chart__dot--unknown.chart__dot--win {
+    stroke: var(--lwc-colorPositive, #2e844a);
+}
+
+.chart__dot--unknown.chart__dot--loss {
+    stroke: var(--lwc-colorNegative, #ea001e);
+}
+
+.chart-card__none {
+    color: var(--lwc-colorTextWeak, #74685e);
+    font-size: 0.85rem;
+}
+
+/* ---- Hero MMR strip ---- */
+
+.mmr-card__title {
+    margin-bottom: 0.5rem;
+}
+
+.mmr-card__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.mmr-card__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+    max-width: 100%;
+}
+
+.mmr-card__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--lwc-colorBackground, #ffffff);
+}
+
+.mmr-card__name {
+    font-size: 0.85rem;
+    color: var(--lwc-colorText, #181818);
+    max-width: 120px;
+    min-width: 0;
+}
+
+.mmr__value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.mmr__value--up {
+    color: var(--lwc-colorPositive, #2e844a);
+}
+
+.mmr__value--down {
+    color: var(--lwc-colorNegative, #ea001e);
+}
+
+/* ---- Ranked hero table ---- */
+
+.ranked-heroes__title {
+    margin-bottom: 0.5rem;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.ranked-heroes__table {
+    width: 100%;
+}
+
+.ranked-heroes__hero {
+    width: 40%;
+}
+
+.hero-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.hero-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 0.3rem;
+    flex: 0 0 auto;
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}
+
+/* ---- Recent ranked ---- */
+
+.ranked-recent__title {
+    margin-bottom: 0.5rem;
+}
+
+.ranked-recent__tz {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.ranked-recent__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+}
+
+.ranked-recent__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+    border-radius: 6px;
+}
+
+.ranked-recent__badge {
+    flex: 0 0 auto;
+    min-width: 2.2rem;
+    text-align: center;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 4px;
+    color: var(--lwc-colorBackground, #ffffff);
+}
+
+.ranked-recent__badge--win {
+    background: var(--lwc-colorPositive, #2e844a);
+}
+
+.ranked-recent__badge--loss {
+    background: var(--lwc-colorNegative, #ea001e);
+}
+
+.ranked-recent__badge--muted {
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.ranked-recent__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+}
+
+.ranked-recent__name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ranked-recent__delta {
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--lwc-colorText, #181818);
+}
+
+.ranked-recent__when {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}

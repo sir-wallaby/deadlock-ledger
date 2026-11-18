@@ -1,0 +1,26 @@
+{
+    "name": "deadlock-lwc",
+    "version": "0.0.1",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "clean": "rimraf node_modules __lwr_cache__ site",
+        "dev": "lwr dev",
+        "build": "lwr build --clean",
+        "start": "lwr start",
+        "stage": "npm run build && npm run start"
+    },
+    "dependencies": {
+        "lwc": "^9.4.1",
+        "lwr": "^0.24.0",
+        "lightning-base-components": "^1.28.19-alpha",
+        "@salesforce-ux/design-system": "^2.264.0"
+    },
+    "devDependencies": {
+        "rimraf": "^6.0.1"
+    },
+    "engines": {
+        "node": ">=22.0.0"
+    }
+}

@@ -1,0 +1,131 @@
+.app {
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+.app__title {
+    color: #1b96ff;
+    margin-bottom: 0;
+}
+
+.app__muted {
+    color: var(--lwc-colorTextWeak, #74685e);
+    font-size: 0.85rem;
+}
+
+.app__rule {
+    margin-top: 0.25rem;
+}
+
+.app__updated {
+    margin-top: 1rem;
+    text-align: right;
+}
+
+.player-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.player-bar__avatar {
+    flex: 0 0 auto;
+}
+
+.player-bar__id {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.player-bar__actions {
+    flex: 0 0 auto;
+}
+
+.recent__title {
+    margin-bottom: 0.5rem;
+}
+
+.recent__tz {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.recent__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+}
+
+.recent__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+    border-radius: 0.3rem;
+}
+
+.recent__badge {
+    flex: 0 0 auto;
+    min-width: 56px;
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.3rem;
+    border-radius: 0.2rem;
+}
+
+.recent__badge--win {
+    color: #2ea44f;
+    background: rgba(46, 164, 79, 0.13);
+}
+
+.recent__badge--loss {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+}
+
+.recent__badge--muted {
+    color: var(--lwc-colorTextWeak, #74685e);
+    background: rgba(116, 104, 94, 0.1);
+}
+
+.recent__icon {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: 0.25rem;
+    flex: 0 0 auto;
+    background: var(--lwc-colorBackground, #fff);
+}
+
+.recent__hero {
+    flex: 1 1 auto;
+    font-weight: 600;
+    min-width: 0;
+}
+
+.recent__mode {
+    flex: 0 1 auto;
+    font-size: 0.8rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+    white-space: nowrap;
+}
+
+.recent__when {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--lwc-colorTextWeak, #74685e);
+    white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+    .recent__mode {
+        display: none;
+    }
+}

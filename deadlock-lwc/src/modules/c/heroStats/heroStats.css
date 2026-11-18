@@ -1,0 +1,84 @@
+.empty {
+    text-align: center;
+}
+
+.empty__teapot {
+    width: 160px;
+    height: 160px;
+}
+
+/* CSS overrides the SVG presentation attributes, so the teapot follows the
+   theme (light and dark) without duplicating the artwork. */
+.empty__teapot .teapot-lines {
+    stroke: var(--lwc-colorTextWeak, #74685e);
+}
+
+.empty__teapot .teapot-body {
+    fill: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}
+
+.empty__msg {
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.summary__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .summary__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.summary__card {
+    padding: 0.9rem 1rem;
+}
+
+.summary__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.summary__value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0.25rem 0;
+}
+
+.summary__note {
+    font-size: 0.75rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.hero-table {
+    width: 100%;
+}
+
+.hero-table__hero {
+    width: 34%;
+}
+
+.hero-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.hero-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 0.3rem;
+    flex: 0 0 auto;
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deadlock Ranked</title>
+    <link rel="stylesheet" href="/assets/styles/salesforce-lightning-design-system.css" />
+    <style>
+        /*
+         * Theme tokens.
+         *
+         * SLDS 2 is fully token-driven: every component color resolves as
+         * var(--slds-c-<component>-…, var(--slds-g-color-…, fallback)), so
+         * overriding the global --slds-g-* scale on :root re-themes every
+         * SLDS component (boxes, tables, alerts, inputs, buttons, badges,
+         * progress bars) at once. This stylesheet comes after the SLDS link,
+         * so the overrides below win the cascade.
+         *
+         * The --lwc-* variables are this app's own semantic colors; they are
+         * defined here so the var() references in the component CSS resolve
+         * (they were previously dead — the fallback hex always won).
+         */
+        :root {
+            --lwc-colorText: #181818;
+            --lwc-colorTextWeak: #74685e;
+            --lwc-colorBackground: #ffffff;
+            --lwc-colorBackgroundSecondary: #f3f2f1;
+            --lwc-colorBorder: #e5e5e5;
+            --lwc-colorTrack: #ecebe9;
+            --lwc-colorPositive: #2e844a;
+            --lwc-colorNegative: #ea001e;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* Warm dark neutral scale: bright end = surfaces, dark end =
+                   page. Mirrors the light scale's usage (high = surface,
+                   low = text) so every SLDS component flips correctly. */
+                --slds-g-color-neutral-base-100: #262320;
+                --slds-g-color-neutral-base-95: #2e2a26;
+                --slds-g-color-neutral-base-90: #332e29;
+                --slds-g-color-neutral-base-80: #3a352f;
+                --slds-g-color-neutral-base-70: #4d463e;
+                --slds-g-color-neutral-base-65: #5a524a;
+                --slds-g-color-neutral-base-60: #685f56;
+                --slds-g-color-neutral-base-50: #7d746a;
+                --slds-g-color-neutral-base-40: #948b81;
+                --slds-g-color-neutral-base-30: #aba297;
+                --slds-g-color-neutral-base-20: #c9c1b6;
+                --slds-g-color-neutral-base-15: #d5cfc6;
+                --slds-g-color-neutral-base-10: #e5e1db;
+                --slds-g-color-neutral-base-0: #f5f2ee;
+
+                --slds-g-color-border-base-1: #3a352f;
+                --slds-g-color-border-base-2: #4d463e;
+                --slds-g-color-border-base-3: #685f56;
+                --slds-g-color-border-base-4: #7d746a;
+
+                --slds-g-color-surface-1: #262320;
+                --slds-g-color-surface-2: #2e2a26;
+                --slds-g-color-surface-3: #332e29;
+                --slds-g-color-surface-container-1: #262320;
+                --slds-g-color-surface-container-2: #2e2a26;
+                --slds-g-color-surface-container-3: #332e29;
+
+                --slds-g-color-on-surface-1: #948b81;
+                --slds-g-color-on-surface-2: #e5e1db;
+                --slds-g-color-on-surface-3: #f5f2ee;
+
+                --lwc-colorText: #e5e1db;
+                --lwc-colorTextWeak: #948b81;
+                --lwc-colorBackground: #262320;
+                --lwc-colorBackgroundSecondary: #2e2a26;
+                --lwc-colorBorder: #3a352f;
+                --lwc-colorTrack: #3a352f;
+                --lwc-colorPositive: #62c477;
+                --lwc-colorNegative: #ff8a80;
+            }
+
+            body {
+                background: #1c1a17;
+                color: #e5e1db;
+            }
+        }
+    </style>
+</head>
+<body class="slds-scope">
+    {{{body}}}
+    {{{lwr_resources}}}
+</body>
+</html>
