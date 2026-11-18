@@ -1,10 +1,16 @@
-import { LightningElement, api } from 'lwc';
+import { LightningElement, api, track } from 'lwc';
 import {
     CALIBRATION_MATCHES,
     RANK_NAMES,
-    decodeBadge
+    ROMAN,
+    RANK_POINTS_PER_RANK,
+    RANK_POINTS_PER_SUBRANK,
+    ETERNUS_POINTS,
+    decodeBadge,
+    rankForPoints
 } from '../../../../services/constants.js';
 import { isMatchScored, isMatchWon } from '../../../../services/outcomes.js';
+import { LOCAL_ACCOUNT_ID } from '../../../../services/deadlockApi.js';
 
 // SVG geometry (viewBox units); the right padding holds the rank-name labels.
 const CHART = { w: 600, h: 170, padL: 10, padR: 76, padT: 22, padB: 14, dot: 4.5 };
@@ -36,13 +42,103 @@ function deltaText(delta) {
     return delta === 0 ? '0' : `−${Math.abs(delta)}`;
 }
 
+// Rank-ladder bar for one match: the window spans the full rank(s) covered
+// by before/after, with a tick at every subrank border (thin) and rank
+// border (thick), subrank roman numerals centered in each subrank span, and
+// rank names at each rank's start. Markers sit at the before/after points.
+function buildLadder(before, after) {
+    const loR = rankForPoints(Math.min(before, after));
+    const hiR = rankForPoints(Math.max(before, after));
+    const start = (loR.rank - 1) * RANK_POINTS_PER_RANK;
+    const end =
+        hiR.rank === 11
+            ? Math.max(before, after) + RANK_POINTS_PER_SUBRANK // Eternus has no fixed end — show a 1000-pt window
+            : hiR.rank * RANK_POINTS_PER_RANK;
+    const span = end - start;
+    const pct = (p) => ((p - start) / span) * 100;
+
+    const ticks = [];
+    const sublabels = [];
+    const rankLabels = [];
+    for (let r = loR.rank; r <= hiR.rank && r <= 10; r++) {
+        const rankStart = (r - 1) * RANK_POINTS_PER_RANK;
+        rankLabels.push({
+            key: `r${r}`,
+            text: RANK_NAMES[r] || '',
+            style: `left: ${pct(rankStart).toFixed(2)}%`
+        });
+        for (let s = 1; s <= 6; s++) {
+            const sStart = rankStart + (s - 1) * RANK_POINTS_PER_SUBRANK;
+            const sEnd =
+                s === 6
+                    ? rankStart + RANK_POINTS_PER_RANK
+                    : sStart + RANK_POINTS_PER_SUBRANK;
+            if (sEnd <= start || sStart >= end) continue;
+            sublabels.push({
+                key: `s${r}-${s}`,
+                text: ROMAN[s],
+                style: `left: ${pct((sStart + sEnd) / 2).toFixed(2)}%`
+            });
+            // Border between subrank s-1 and s (the rank start itself is the bar edge).
+            if (s > 1) {
+                ticks.push({
+                    key: `t${r}-${s}`,
+                    cls: 'match-mmr__ladder-tick',
+                    style: `left: ${pct(sStart).toFixed(2)}%`
+                });
+            }
+        }
+    }
+    if (hiR.rank === 11) {
+        rankLabels.push({
+            key: 'r11',
+            text: RANK_NAMES[11] || '',
+            style: `left: ${pct(ETERNUS_POINTS).toFixed(2)}%`
+        });
+    }
+    // Rank borders strictly inside the window (thicker ticks).
+    for (let r = loR.rank + 1; r <= hiR.rank && r <= 10; r++) {
+        const border = (r - 1) * RANK_POINTS_PER_RANK;
+        if (border > start && border < end) {
+            ticks.push({
+                key: `tb${r}`,
+                cls: 'match-mmr__ladder-tick match-mmr__ladder-tick--rank',
+                style: `left: ${pct(border).toFixed(2)}%`
+            });
+        }
+    }
+
+    const applied = after - before;
+    return {
+        ticks,
+        sublabels,
+        rankLabels,
+        beforeStyle: `left: ${pct(before).toFixed(2)}%`,
+        afterStyle: `left: ${pct(after).toFixed(2)}%`,
+        afterCls:
+            'match-mmr__ladder-marker match-mmr__ladder-marker--after' +
+            (applied > 0
+                ? ' match-mmr__ladder-marker--up'
+                : applied < 0
+                    ? ' match-mmr__ladder-marker--down'
+                    : '')
+    };
+}
+
 export default class RankedStats extends LightningElement {
     // Raw ranked rows for the current season, newest first (from
     // getPlayerHeroStats). heroMap: hero_id -> hero metadata. localRanked:
     // { rank, heroMmr } from the GC poller, own account only (null otherwise).
+    // matchMeta: the poller's match-meta.json ({ matches: { id: entry } }),
+    // own account only (null otherwise / under dev).
     @api rankedMatches = [];
     @api heroMap = new Map();
     @api localRanked = null;
+    @api matchMeta = null;
+
+    // The recent-list row the user selected for the Match MMR section. null =
+    // auto (newest ranked match that has metadata).
+    @track selectedMatchId = null;
 
     get show() {
         return Array.isArray(this.rankedMatches) && this.rankedMatches.length > 0;
@@ -307,12 +403,26 @@ export default class RankedStats extends LightningElement {
 
     // ---- Recent 5 ranked ----
 
+    // Match ids the poller has metadata for (drains a few per run).
+    get metaIds() {
+        const meta = this.matchMeta;
+        if (!meta || !meta.matches) return new Set();
+        return new Set(
+            this.rankedMatches
+                .filter((m) => meta.matches[m.match_id])
+                .map((m) => m.match_id)
+        );
+    }
+
     get recent() {
+        const metaIds = this.metaIds;
+        const selectedId = this.matchMmr && this.matchMmr.selectedId;
         return this.rankedMatches.slice(0, 5).map((m) => {
             const meta = this.heroMap.get(m.hero_id) || {};
             const images = meta.images || {};
             const scored = isMatchScored(m);
             const won = scored && isMatchWon(m);
+            const hasMeta = metaIds.has(m.match_id);
             return {
                 key: m.match_id,
                 name: meta.name || `Hero ${m.hero_id}`,
@@ -328,8 +438,181 @@ export default class RankedStats extends LightningElement {
                         : 'ranked-recent__badge--muted'),
                 delta: isCalibration(m)
                     ? `Calibration ${m.ranked_calibration_match}/${CALIBRATION_MATCHES}`
-                    : deltaText(m.ranked_delta)
+                    : deltaText(m.ranked_delta),
+                itemClass:
+                    'ranked-recent__item' +
+                    (hasMeta ? ' ranked-recent__item--selectable' : '') +
+                    (m.match_id === selectedId
+                        ? ' ranked-recent__item--selected'
+                        : '')
             };
         });
+    }
+
+    handleRecentSelect(e) {
+        this.selectedMatchId = Number(e.currentTarget.dataset.id);
+    }
+
+    // ---- Match MMR (per-match metadata, own account only) ----
+
+    // The selected match's post-match view. null = nothing to show (no
+    // metadata at all, e.g. dev mode); hasEntry false = a row was picked
+    // whose metadata the poller hasn't fetched yet.
+    get matchMmr() {
+        const meta = this.matchMeta;
+        if (!meta || !meta.matches || this.rankedMatches.length === 0) return null;
+        const withMeta = this.rankedMatches.filter((m) => meta.matches[m.match_id]);
+        if (withMeta.length === 0) return null;
+        const sel =
+            this.rankedMatches.find((m) => m.match_id === this.selectedMatchId) ||
+            withMeta[0];
+        const entry = meta.matches[sel.match_id] || null;
+        return {
+            selectedId: sel.match_id,
+            hasEntry: !!entry,
+            ...this.buildMatchMmr(sel, entry)
+        };
+    }
+
+    buildMatchMmr(m, entry) {
+        const scored = isMatchScored(m);
+        const won = scored && isMatchWon(m);
+        const out = {
+            outcomeLabel: scored ? (won ? 'W' : 'L') : 'N/S',
+            outcomeClass:
+                'match-mmr__outcome ' +
+                (scored
+                    ? won
+                        ? 'match-mmr__outcome--win'
+                        : 'match-mmr__outcome--loss'
+                    : 'match-mmr__outcome--muted'),
+            when: m.start_time ? formatEt(m.start_time) : '',
+            ownHeroName: '',
+            ownHeroIcon: '',
+            ownKda: '',
+            calibLabel: '',
+            team0: [],
+            team1: [],
+            ladder: null,
+            badgeShift: '',
+            pointsText: '',
+            note: ''
+        };
+        if (!entry) return out;
+
+        const own =
+            entry.players.find((p) => p.account_id === LOCAL_ACCOUNT_ID) || null;
+        if (own) {
+            const h = this.heroMap.get(own.hero_id) || {};
+            const images = h.images || {};
+            out.ownHeroName = h.name || `Hero ${own.hero_id}`;
+            out.ownHeroIcon = images.icon_hero_card_webp || images.icon_hero_card || '';
+            out.ownKda = `${own.kills} / ${own.deaths} / ${own.assists}`;
+        }
+
+        const rowsFor = (team) =>
+            entry.players
+                .filter((p) => p.team === team)
+                .sort((a, b) => a.player_slot - b.player_slot)
+                .map((p) => this.buildPlayerRow(p));
+        out.team0 = rowsFor(0);
+        out.team1 = rowsFor(1);
+
+        const r = own && own.rank;
+        // Calibration: the history row's per-season number is authoritative;
+        // meta's initial_calibration_games is the pre-match count (+1 = this).
+        const isCalib =
+            (m.ranked_calibration_match || 0) > 0 ||
+            (!r || r.initial_display_rank === 0);
+        if (isCalib) {
+            const n =
+                m.ranked_calibration_match ||
+                (r && r.initial_calibration_games
+                    ? r.initial_calibration_games + 1
+                    : 0);
+            out.calibLabel = `Calibration ${n}/${CALIBRATION_MATCHES}`;
+            if (r) {
+                out.pointsText = `${deltaText(
+                    (r.final_flat_progress || 0) - (r.initial_flat_progress || 0)
+                )} pts`;
+            }
+            return out;
+        }
+        if (!r) return out;
+
+        const before = r.initial_flat_progress || 0;
+        const after = r.final_flat_progress || 0;
+        const applied = after - before;
+        out.pointsText = `${before} → ${after} pts (${deltaText(applied)})`;
+
+        const beforeBadge = decodeBadge(r.initial_display_rank);
+        const afterBadge =
+            m.ranked_display_badge !== null && m.ranked_display_badge !== undefined
+                ? decodeBadge(m.ranked_display_badge)
+                : null;
+        if (afterBadge) {
+            out.badgeShift = `${beforeBadge.name} ${beforeBadge.numeral} → ${afterBadge.name} ${afterBadge.numeral}`;
+        }
+        if (r.consumed_demotion_protection === true) {
+            out.note = 'demotion protection applied — loss clamped at subrank border';
+        }
+        out.ladder = buildLadder(before, after);
+        return out;
+    }
+
+    buildPlayerRow(p) {
+        const h = this.heroMap.get(p.hero_id) || {};
+        const images = h.images || {};
+        const row = {
+            key: `${p.team}-${p.player_slot}`,
+            icon: images.icon_hero_card_webp || images.icon_hero_card || '',
+            rowClass:
+                'match-mmr__row' +
+                (p.account_id === LOCAL_ACCOUNT_ID ? ' match-mmr__row--own' : ''),
+            badgeIcon: '',
+            badgeNumeral: '',
+            badgeText: '—',
+            mmrText: '—',
+            deltaText: '',
+            deltaClass: 'match-mmr__delta match-mmr__delta--flat',
+            deltaTitle: '',
+            shield: false
+        };
+        const r = p.rank;
+        if (!r) return row;
+        const badge = decodeBadge(r.initial_display_rank);
+        if (badge.rank > 0) {
+            row.badgeIcon = badge.icon;
+            row.badgeNumeral = badge.numeral;
+        } else {
+            // Obscurus = mid-calibration. initial_calibration_games is the
+            // pre-match count, so this match is cal #count+1.
+            const cal = r.initial_calibration_games || 0;
+            row.badgeText =
+                cal < CALIBRATION_MATCHES
+                    ? `Cal ${Math.min(CALIBRATION_MATCHES, cal + 1)}/${CALIBRATION_MATCHES}`
+                    : 'Obscurus';
+        }
+        const before = r.initial_flat_progress || 0;
+        const after = r.final_flat_progress || 0;
+        const applied = after - before;
+        row.mmrText = `${before} → ${after}`;
+        row.deltaText = deltaText(applied);
+        row.deltaClass =
+            'match-mmr__delta ' +
+            (applied > 0
+                ? 'match-mmr__delta--up'
+                : applied < 0
+                    ? 'match-mmr__delta--down'
+                    : 'match-mmr__delta--flat');
+        if (
+            r.desired_progress_change !== null &&
+            r.desired_progress_change !== undefined &&
+            r.desired_progress_change !== applied
+        ) {
+            row.deltaTitle = `Wanted ${deltaText(r.desired_progress_change)}`;
+        }
+        row.shield = r.consumed_demotion_protection === true;
+        return row;
     }
 }

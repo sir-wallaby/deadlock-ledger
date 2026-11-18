@@ -4,7 +4,8 @@ import RankedStats from 'c/rankedStats';
 import {
     LOCAL_ACCOUNT_ID,
     getPlayerHeroStats,
-    getLocalRankedData
+    getLocalRankedData,
+    getLocalMatchMeta
 } from '../../../../services/deadlockApi.js';
 import heroes from '../../../../services/heroes.js';
 import { SEASONS } from '../../../../services/constants.js';
@@ -100,6 +101,7 @@ export default class App extends LightningElement {
     @track recentMatches = [];
     @track rankedMatches = [];
     @track localRanked = null;
+    @track matchMeta = null;
 
     // Static: hero metadata is player-independent and a local snapshot now.
     heroMap = new Map(heroes.map((h) => [h.id, h]));
@@ -161,20 +163,23 @@ export default class App extends LightningElement {
         if (isInitial) this.loading = true;
         else this.refreshing = true;
         try {
-            // Local ranked state is own-account only and 404-tolerant; it
-            // degrades to null (no points bar / MMR strip) rather than failing
-            // the load, so it runs alongside the stats fetch.
-            const [result, localRanked] = await Promise.all([
+            // Local ranked state + per-match metadata are own-account only and
+            // 404-tolerant; they degrade to null (no points bar / MMR strip /
+            // Match MMR section) rather than failing the load, so they run
+            // alongside the stats fetch.
+            const [result, localRanked, matchMeta] = await Promise.all([
                 getPlayerHeroStats(this.player.accountId, {
                     isScored: isMatchScored,
                     isWon: isMatchWon
                 }),
-                getLocalRankedData(this.player.accountId)
+                getLocalRankedData(this.player.accountId),
+                getLocalMatchMeta(this.player.accountId)
             ]);
             if (seq !== this.loadSeq) return; // superseded by a refresh — drop stale data
             this.stats = this.computeStats(result.stats);
             this.rankedMatches = result.rankedMatches || [];
             this.localRanked = localRanked;
+            this.matchMeta = matchMeta;
             this.recentMatches = this.computeRecentMatches(result.recentMatches);
             this.dataFresh = result.fresh;
             this.rateLimited = result.rateLimited;
@@ -187,6 +192,7 @@ export default class App extends LightningElement {
             this.stats = null;
             this.rankedMatches = [];
             this.localRanked = null;
+            this.matchMeta = null;
             this.recentMatches = [];
             this.dataFresh = true;
             this.rateLimited = false;

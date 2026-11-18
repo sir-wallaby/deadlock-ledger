@@ -150,7 +150,12 @@
             </h2>
             <ul class="ranked-recent__list">
                 <template for:each={recent} for:item="m">
-                    <li key={m.key} class="ranked-recent__item">
+                    <li
+                        key={m.key}
+                        class={m.itemClass}
+                        data-id={m.key}
+                        onclick={handleRecentSelect}
+                    >
                         <span class={m.badgeClass}>{m.label}</span>
                         <img src={m.icon} alt="" class="ranked-recent__icon" />
                         <span class="ranked-recent__name slds-truncate" title={m.name}>{m.name}</span>
@@ -160,5 +165,129 @@
                 </template>
             </ul>
         </section>
+
+        <template if:true={matchMmr}>
+            <section class="match-mmr slds-box slds-m-bottom_medium">
+                <h2 class="match-mmr__title slds-text-heading_small">Match MMR</h2>
+                <div class="match-mmr__header">
+                    <span class={matchMmr.outcomeClass}>{matchMmr.outcomeLabel}</span>
+                    <span class="match-mmr__when">{matchMmr.when}</span>
+                    <template if:true={matchMmr.ownHeroIcon}>
+                        <img src={matchMmr.ownHeroIcon} alt="" class="match-mmr__hero-icon" />
+                        <span class="match-mmr__hero-name">{matchMmr.ownHeroName}</span>
+                    </template>
+                    <span class="match-mmr__kda">{matchMmr.ownKda} KDA</span>
+                    <template if:true={matchMmr.calibLabel}>
+                        <span class="match-mmr__calib">{matchMmr.calibLabel}</span>
+                    </template>
+                </div>
+                <template if:true={matchMmr.hasEntry}>
+                    <div class="match-mmr__teams">
+                        <div class="match-mmr__team">
+                            <div class="match-mmr__team-head">Team 0</div>
+                            <template for:each={matchMmr.team0} for:item="p">
+                                <div key={p.key} class={p.rowClass}>
+                                    <img src={p.icon} alt="" class="match-mmr__hero-icon" />
+                                    <span class="match-mmr__badge">
+                                        <template if:true={p.badgeIcon}>
+                                            <img src={p.badgeIcon} alt="" class="match-mmr__badge-icon" />
+                                            <span class="match-mmr__badge-numeral">{p.badgeNumeral}</span>
+                                        </template>
+                                        <template if:false={p.badgeIcon}>
+                                            <span class="match-mmr__badge-text">{p.badgeText}</span>
+                                        </template>
+                                    </span>
+                                    <span class="match-mmr__mmr">{p.mmrText}</span>
+                                    <span class={p.deltaClass} title={p.deltaTitle}>{p.deltaText}</span>
+                                    <template if:true={p.shield}>
+                                        <svg
+                                            class="match-mmr__shield"
+                                            viewBox="0 0 16 16"
+                                            role="img"
+                                            aria-label="Demotion protection applied"
+                                        >
+                                            <path d="M8 1l6 2.2v4.3c0 3.9-2.6 6.9-6 7.9-3.4-1-6-4-6-7.9V3.2L8 1z"></path>
+                                        </svg>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="match-mmr__team">
+                            <div class="match-mmr__team-head">Team 1</div>
+                            <template for:each={matchMmr.team1} for:item="p">
+                                <div key={p.key} class={p.rowClass}>
+                                    <img src={p.icon} alt="" class="match-mmr__hero-icon" />
+                                    <span class="match-mmr__badge">
+                                        <template if:true={p.badgeIcon}>
+                                            <img src={p.badgeIcon} alt="" class="match-mmr__badge-icon" />
+                                            <span class="match-mmr__badge-numeral">{p.badgeNumeral}</span>
+                                        </template>
+                                        <template if:false={p.badgeIcon}>
+                                            <span class="match-mmr__badge-text">{p.badgeText}</span>
+                                        </template>
+                                    </span>
+                                    <span class="match-mmr__mmr">{p.mmrText}</span>
+                                    <span class={p.deltaClass} title={p.deltaTitle}>{p.deltaText}</span>
+                                    <template if:true={p.shield}>
+                                        <svg
+                                            class="match-mmr__shield"
+                                            viewBox="0 0 16 16"
+                                            role="img"
+                                            aria-label="Demotion protection applied"
+                                        >
+                                            <path d="M8 1l6 2.2v4.3c0 3.9-2.6 6.9-6 7.9-3.4-1-6-4-6-7.9V3.2L8 1z"></path>
+                                        </svg>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <template if:true={matchMmr.ladder}>
+                        <div class="match-mmr__ladder">
+                            <div class="match-mmr__ladder-bar">
+                                <template for:each={matchMmr.ladder.ticks} for:item="t">
+                                    <div key={t.key} class={t.cls} style={t.style}></div>
+                                </template>
+                                <div
+                                    class="match-mmr__ladder-marker match-mmr__ladder-marker--before"
+                                    style={matchMmr.ladder.beforeStyle}
+                                ></div>
+                                <div class={matchMmr.ladder.afterCls} style={matchMmr.ladder.afterStyle}></div>
+                            </div>
+                            <div class="match-mmr__ladder-sublabels">
+                                <template for:each={matchMmr.ladder.sublabels} for:item="l">
+                                    <span key={l.key} style={l.style}>{l.text}</span>
+                                </template>
+                            </div>
+                            <div class="match-mmr__ladder-ranklabels">
+                                <template for:each={matchMmr.ladder.rankLabels} for:item="l">
+                                    <span key={l.key} style={l.style}>{l.text}</span>
+                                </template>
+                            </div>
+                            <div class="match-mmr__ladder-legend">
+                                <span class="match-mmr__ladder-swatch match-mmr__ladder-swatch--before"></span>
+                                before
+                                <span class="match-mmr__ladder-swatch match-mmr__ladder-swatch--after"></span>
+                                after
+                            </div>
+                        </div>
+                    </template>
+                    <p class="match-mmr__summary">
+                        <template if:true={matchMmr.badgeShift}>
+                            <span class="match-mmr__summary-badge">{matchMmr.badgeShift}</span>
+                        </template>
+                        <span>{matchMmr.pointsText}</span>
+                        <template if:true={matchMmr.note}>
+                            <span class="match-mmr__summary-note"> · {matchMmr.note}</span>
+                        </template>
+                    </p>
+                </template>
+                <template if:false={matchMmr.hasEntry}>
+                    <p class="match-mmr__pending">
+                        Metadata for this match hasn't been fetched yet — the poller drains the backlog a few matches per run.
+                    </p>
+                </template>
+            </section>
+        </template>
     </template>
 </template>

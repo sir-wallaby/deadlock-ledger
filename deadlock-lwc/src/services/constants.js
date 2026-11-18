@@ -39,6 +39,15 @@ export function seasonIndexFor(timestampSec) {
 export const CALIBRATION_MATCHES = 8;
 export const RANKED_POINTS_PER_MATCH = 350;
 
+// Rank-points ladder — what the per-match metadata's `flat_progress` means:
+// cumulative rank points, Initiate I = 0. points(R, S) = (R-1)*6500 +
+// (S-1)*1000 for R = 1..10 (Initiate..Ascendant), S = 1..6 (I..VI); subrank
+// VI is 1500 wide (it ends at the next rank's start); Eternus is
+// percentile-based from 65,000 up. Verified against live match data.
+export const RANK_POINTS_PER_RANK = 6500;
+export const RANK_POINTS_PER_SUBRANK = 1000;
+export const ETERNUS_POINTS = 65000;
+
 // Official S2 rank names, by rank number (1..11).
 export const RANK_NAMES = {
     1: 'Initiate',
@@ -54,7 +63,33 @@ export const RANK_NAMES = {
     11: 'Eternus'
 };
 
-const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' };
+export const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' };
+
+// Map a flat_progress value onto the ladder: its rank, subrank, and the
+// point range of that subrank (subrankEnd is null for Eternus — no fixed end).
+export function rankForPoints(points) {
+    if (points >= ETERNUS_POINTS) {
+        return {
+            rank: 11,
+            subrank: 0,
+            rankStart: ETERNUS_POINTS,
+            subrankStart: points,
+            subrankEnd: null
+        };
+    }
+    const rank = Math.min(10, Math.floor(points / RANK_POINTS_PER_RANK) + 1);
+    const rankStart = (rank - 1) * RANK_POINTS_PER_RANK;
+    const subrank = Math.min(
+        6,
+        Math.floor((points - rankStart) / RANK_POINTS_PER_SUBRANK) + 1
+    );
+    const subrankStart = rankStart + (subrank - 1) * RANK_POINTS_PER_SUBRANK;
+    const subrankEnd =
+        subrank === 6
+            ? rankStart + RANK_POINTS_PER_RANK
+            : subrankStart + RANK_POINTS_PER_SUBRANK;
+    return { rank, subrank, rankStart, subrankStart, subrankEnd };
+}
 
 // Badge encoding (verified against live data): badge = rank*10 + subrank,
 // subrank 1..6 (I..VI). Badge 0 = Obscurus (calibration / unrated).

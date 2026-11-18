@@ -6,6 +6,7 @@
 #                       content is unchanged (the app judges freshness by mtime)
 #   rank-data.json      own-account ranked state (SO cache + GetRankData)
 #   hero-mmr.json       per-hero relative MMR (GetHeroMMRRankings)
+#   match-meta.json     per-match metadata (per-match MMR + match info)
 set -eu
 
 BIN=/home/wtaylor/Repo/deadlock-ledger/gc-tap/target/release/deadlock-gc-history
@@ -44,6 +45,6 @@ push_file() {
   echo "pushed $NAME"
 }
 
-for NAME in match-history.json rank-data.json hero-mmr.json; do
+for NAME in match-history.json rank-data.json hero-mmr.json match-meta.json; do
   push_file "$NAME"
 done

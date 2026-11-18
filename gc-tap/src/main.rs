@@ -10,6 +10,11 @@
 //!                       Points" save object (from the account's SO cache)
 //!                       + GetRankData (9271).
 //!   hero-mmr.json       Per-hero relative MMR (GetHeroMMRRankings, 9234).
+//!   match-meta.json     Per-match metadata (GetMatchMetaData salts, 9167 +
+//!                       the valve.net replay files): every player's rank
+//!                       block (per-match MMR) + match info. Fetched a few
+//!                       matches per run under a daily budget; older matches
+//!                       drain over days.
 //!
 //! Commands:
 //!   login   Interactive one-time login (password + Steam Guard). Saves a
@@ -20,8 +25,9 @@
 //!   check   Like fetch, but discards the output (sanity check).
 //!   status  Show config and refresh-token state.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::Read as _;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -43,12 +49,17 @@ use steam_vent_proto_deadlock::citadel_gcmessages_client::{
     cmsg_client_to_gcget_hero_mmrrankings_response,
     cmsg_client_to_gcget_match_history_response,
     cmsg_client_to_gcget_match_history_response::Match,
+    cmsg_client_to_gcget_match_meta_data_response,
     cmsg_gcto_client_get_rank_data_response,
     CMsgClientToGCGetHeroMMRRankings, CMsgClientToGCGetHeroMMRRankingsResponse,
     CMsgClientToGCGetMatchHistory, CMsgClientToGCGetMatchHistoryResponse,
+    CMsgClientToGCGetMatchMetaData, CMsgClientToGCGetMatchMetaDataResponse,
     CMsgClientToGCGetRankData, CMsgGCToClientGetRankDataResponse, CSORankedProgress,
 };
-use steam_vent_proto_deadlock::citadel_gcmessages_common::{ECitadelGameMode, ECitadelMatchMode};
+use steam_vent_proto_deadlock::citadel_gcmessages_common::{
+    cmsg_match_meta_data_contents, CMsgMatchMetaData, CMsgMatchMetaDataContents,
+    ECitadelGameMode, ECitadelMatchMode,
+};
 use steam_vent_proto_deadlock::gcsdk_gcmessages::{
     cmsg_socache_subscribed, CMsgClientWelcome, CMsgSOIDOwner, CMsgSOCacheSubscribed,
     CMsgSOMultipleObjects,
@@ -68,6 +79,14 @@ const MAX_PAGES: u32 = 500;
 /// CSORankedProgress `rank_interval` (a different GC-internal id space).
 /// Bump per season; S2 ends 2027-03-11 22:00Z.
 const RANK_INTERVAL: u32 = 2;
+
+/// Per-match metadata budget. The ecosystem caps salt fetches at ~40 per
+/// account per day; the poller runs every 10 min, so a small per-run cap
+/// plus a hard daily budget keeps it well under while still draining the
+/// backlog (oldest-first is not worth it — newest matches are what the
+/// dashboard shows).
+const META_PER_RUN: usize = 3;
+const META_DAILY_BUDGET: u32 = 40;
 
 fn home() -> PathBuf {
     std::env::var_os("HOME")
@@ -356,6 +375,89 @@ struct HeroMmrOut {
     account_id: u32,
     fetched_at: u64,
     heroes: Vec<HeroMmrRow>,
+}
+
+/// Per-player rank block from the match metadata (CMsgMatchPlayerRankData) —
+/// the authoritative per-match MMR (initial/final flat progress). Unset
+/// fields serialize as null, matching the MatchOut convention.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct PlayerRankOut {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_display_rank: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_flat_progress: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    final_flat_progress: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    desired_progress_change: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_calibration_games: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_demotion_protection_games: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    consumed_demotion_protection: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_win_streak: Option<u32>,
+}
+
+/// One of the 12 players from the match metadata. `rank` is null when the
+/// match was unranked (the GC then leaves player_rank_data unset).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct PlayerMetaOut {
+    account_id: u32,
+    player_slot: u32,
+    team: u32,
+    hero_id: u32,
+    kills: u32,
+    deaths: u32,
+    assists: u32,
+    mvp_rank: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rank: Option<PlayerRankOut>,
+}
+
+/// One Street Brawl round (game_mode 4).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct BrawlRoundOut {
+    duration_s: u32,
+    winning_team: u32,
+}
+
+/// One match's metadata (CMsgMatchMetaDataContents.match_info, slimmed).
+/// `fetched_at` doubles as the daily-budget accounting key.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct MatchMetaEntry {
+    start_time: u32,
+    game_mode: u32,
+    match_mode: u32,
+    winning_team: u32,
+    #[serde(default)]
+    not_scored: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ranked_type: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rank_interval: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    team_score: Option<Vec<u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    street_brawl_rounds: Option<Vec<BrawlRoundOut>>,
+    #[serde(default)]
+    players: Vec<PlayerMetaOut>,
+    fetched_at: u64,
+}
+
+/// match-meta.json: match_id -> entry. `missing` are match ids the GC
+/// reports as invalid (tombstoned so they are not retried forever).
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+struct MatchMetaOut {
+    #[serde(default)]
+    account_id: u32,
+    #[serde(default)]
+    fetched_at: u64,
+    #[serde(default)]
+    matches: BTreeMap<u64, MatchMetaEntry>,
+    #[serde(default)]
+    missing: Vec<u64>,
 }
 
 fn build_rank_data(
@@ -657,6 +759,242 @@ async fn fetch_hero_mmr(gc: &steam_vent::GameCoordinator, account32: u32) -> Opt
     )
 }
 
+/// Start of the current UTC day in unix seconds — the daily budget window.
+fn today_start_unix() -> u64 {
+    (now_unix() / 86_400) * 86_400
+}
+
+/// The .meta.bz2 files are zstd for recent matches, bzip2 for older ones —
+/// despite the extension, sniff the magic.
+fn decompress_meta(raw: &[u8]) -> Result<Vec<u8>> {
+    if raw.len() >= 4 && raw[..4] == [0x28, 0xb5, 0x2f, 0xfd] {
+        return zstd::decode_all(std::io::Cursor::new(raw)).context("zstd decode");
+    }
+    if raw.len() >= 4 && raw[..4] == *b"BZh9" {
+        let mut dec = bzip2::read::BzDecoder::new(std::io::Cursor::new(raw));
+        let mut out = Vec::new();
+        dec.read_to_end(&mut out)
+            .context("bzip2 decode")?;
+        return Ok(out);
+    }
+    let magic: Vec<u8> = raw.iter().take(4).copied().collect();
+    bail!("unknown metadata compression (magic {magic:02x?})");
+}
+
+/// Slim CMsgMatchMetaDataContents.match_info down to what the dashboard
+/// consumes: match context + every player's rank block. (Nested/repeated
+/// fields are plain fields in the generated code, not accessors.)
+fn build_meta_entry(mi: &cmsg_match_meta_data_contents::MatchInfo) -> MatchMetaEntry {
+    let players = mi
+        .players
+        .iter()
+        .map(|p| {
+            let rank = p.player_rank_data.as_ref().map(|r| PlayerRankOut {
+                initial_display_rank: r
+                    .has_initial_display_rank()
+                    .then(|| r.initial_display_rank()),
+                initial_flat_progress: r
+                    .has_initial_flat_progress()
+                    .then(|| r.initial_flat_progress()),
+                final_flat_progress: r
+                    .has_final_flat_progress()
+                    .then(|| r.final_flat_progress()),
+                desired_progress_change: r
+                    .has_desired_progress_change()
+                    .then(|| r.desired_progress_change()),
+                initial_calibration_games: r
+                    .has_initial_calibration_games()
+                    .then(|| r.initial_calibration_games()),
+                initial_demotion_protection_games: r
+                    .has_initial_demotion_protection_games()
+                    .then(|| r.initial_demotion_protection_games()),
+                consumed_demotion_protection: r
+                    .has_consumed_demotion_protection()
+                    .then(|| r.consumed_demotion_protection()),
+                initial_win_streak: r
+                    .has_initial_win_streak()
+                    .then(|| r.initial_win_streak()),
+            });
+            PlayerMetaOut {
+                account_id: p.account_id(),
+                player_slot: p.player_slot(),
+                team: p.team().value() as u32,
+                hero_id: p.hero_id(),
+                kills: p.kills(),
+                deaths: p.deaths(),
+                assists: p.assists(),
+                mvp_rank: p.mvp_rank(),
+                rank,
+            }
+        })
+        .collect();
+    MatchMetaEntry {
+        start_time: mi.start_time(),
+        game_mode: mi.game_mode().value() as u32,
+        match_mode: mi.match_mode().value() as u32,
+        winning_team: mi.winning_team().value() as u32,
+        not_scored: mi.not_scored(),
+        ranked_type: mi.has_ranked_type().then(|| mi.ranked_type().value() as u32),
+        rank_interval: mi.has_rank_interval().then(|| mi.rank_interval()),
+        team_score: (!mi.team_score.is_empty()).then(|| mi.team_score.to_vec()),
+        street_brawl_rounds: (!mi.street_brawl_rounds.is_empty()).then(|| {
+            mi.street_brawl_rounds
+                .iter()
+                .map(|r| BrawlRoundOut {
+                    duration_s: r.round_duration_s(),
+                    winning_team: r.winning_team().value() as u32,
+                })
+                .collect()
+        }),
+        players,
+        fetched_at: now_unix(),
+    }
+}
+
+/// One match's metadata: GC 9167 for the salts, then an unauthenticated
+/// download from the replay CDN (the salt is the token). `Ready` on success,
+/// `NotReady` when the match is still being processed (retry next run),
+/// `Missing` when the GC says the match is invalid (permanent — tombstone),
+/// Err on any other failure (the caller stops the run — one failure is
+/// enough to back off).
+enum MetaOutcome {
+    Ready(MatchMetaEntry),
+    NotReady,
+    Missing,
+}
+
+async fn fetch_one_meta(
+    gc: &steam_vent::GameCoordinator,
+    http: &reqwest::Client,
+    match_id: u64,
+) -> Result<MetaOutcome> {
+    let req = CMsgClientToGCGetMatchMetaData {
+        match_id: Some(match_id),
+        ..Default::default()
+    };
+    gc.send(req).await.context("send GetMatchMetaData")?;
+    let rsp: CMsgClientToGCGetMatchMetaDataResponse =
+        gc.one().await.context("GetMatchMetaData response")?;
+    use cmsg_client_to_gcget_match_meta_data_response::EResult as R;
+    match rsp.result() {
+        R::k_eResult_Success => {}
+        R::k_eResult_MatchInFlight | R::k_eResult_TooBusy | R::k_eResult_Timeout => {
+            return Ok(MetaOutcome::NotReady);
+        }
+        R::k_eResult_InvalidMatch | R::k_eResult_InvalidPermission => {
+            return Ok(MetaOutcome::Missing);
+        }
+        other => bail!("GetMatchMetaData result {other:?}"),
+    }
+    if !rsp.has_metadata_salt() || !rsp.has_replay_group_id() {
+        bail!("GC returned no metadata salt or replay group");
+    }
+    let url = format!(
+        "http://replay{}.valve.net/{DEADLOCK_APP_ID}/{match_id}_{}.meta.bz2",
+        rsp.replay_group_id(),
+        rsp.metadata_salt()
+    );
+    let res = http.get(&url).send().await.context("download metadata")?;
+    if !res.status().is_success() {
+        bail!("metadata download HTTP {}", res.status());
+    }
+    let raw = res.bytes().await.context("read metadata body")?;
+    let body = decompress_meta(&raw)?;
+    // Wrapper: CMsgMatchMetaData {version, match_details}; the contents
+    // message is the match_details payload, not the file itself.
+    let outer = CMsgMatchMetaData::parse_from_bytes(&body).context("parse CMsgMatchMetaData")?;
+    if !outer.has_match_details() {
+        bail!("metadata has no match_details");
+    }
+    let contents = CMsgMatchMetaDataContents::parse_from_bytes(outer.match_details())
+        .context("parse CMsgMatchMetaDataContents")?;
+    let Some(mi) = contents.match_info.as_ref() else {
+        bail!("metadata has no match_info");
+    };
+    Ok(MetaOutcome::Ready(build_meta_entry(mi)))
+}
+
+/// Load the stored match-meta.json (first run / corrupt file -> empty).
+fn load_match_meta(path: &Path) -> MatchMetaOut {
+    match fs::read_to_string(path) {
+        Ok(raw) => match serde_json::from_str(&raw) {
+            Ok(meta) => meta,
+            Err(e) => {
+                eprintln!("warning: cannot parse {} ({e}) — starting fresh", path.display());
+                MatchMetaOut::default()
+            }
+        },
+        Err(_) => MatchMetaOut::default(),
+    }
+}
+
+/// Fetch metadata for the newest matches not yet stored, under the daily
+/// budget. Best effort: a permanent failure (invalid match) tombstones the
+/// id and moves on; any other failure stops the run (retried next run).
+/// The stored file is only ever appended to.
+async fn fetch_match_meta(
+    gc: &steam_vent::GameCoordinator,
+    http: &reqwest::Client,
+    rows: &[MatchOut],
+    meta: &mut MatchMetaOut,
+    write: bool,
+) -> Result<()> {
+    let path = data_dir().join("match-meta.json");
+    let fetched_today = meta
+        .matches
+        .values()
+        .filter(|e| e.fetched_at >= today_start_unix())
+        .count() as u32;
+    if fetched_today >= META_DAILY_BUDGET {
+        eprintln!(
+            "match meta: daily budget ({META_DAILY_BUDGET}) reached ({fetched_today} today) — skipping"
+        );
+        return Ok(());
+    }
+    let known = meta.matches.len() + meta.missing.len();
+    let pending: Vec<u64> = rows
+        .iter()
+        .map(|r| r.match_id)
+        .filter(|id| !meta.matches.contains_key(id) && !meta.missing.contains(id))
+        .take(META_PER_RUN.min((META_DAILY_BUDGET - fetched_today) as usize))
+        .collect();
+    if pending.is_empty() {
+        eprintln!("match meta: up to date ({known} stored)");
+        return Ok(());
+    }
+    eprintln!(
+        "match meta: fetching {}/{} pending (budget left {})",
+        pending.len(),
+        rows.len() - known,
+        META_DAILY_BUDGET - fetched_today
+    );
+    for match_id in pending {
+        match fetch_one_meta(gc, http, match_id).await {
+            Ok(MetaOutcome::Ready(entry)) => {
+                eprintln!("match meta: {match_id} ok ({} players)", entry.players.len());
+                meta.matches.insert(match_id, entry);
+            }
+            Ok(MetaOutcome::NotReady) => {
+                eprintln!("match meta: {match_id} not ready yet — retry next run");
+            }
+            Ok(MetaOutcome::Missing) => {
+                eprintln!("match meta: {match_id} invalid — tombstoned");
+                meta.missing.push(match_id);
+            }
+            Err(e) => {
+                eprintln!("match meta: {match_id} failed ({e}) — stopping for this run");
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    if write {
+        meta.fetched_at = now_unix();
+        write_json_if_changed(path, meta)?;
+    }
+    Ok(())
+}
+
 /// Atomic write that skips the rename when the content is unchanged.
 fn write_json_if_changed(path: PathBuf, value: &impl Serialize) -> Result<()> {
     let json = serde_json::to_string_pretty(value)?;
@@ -870,6 +1208,17 @@ async fn fetch_matches(
         None => eprintln!("hero mmr: unavailable"),
     }
 
+    // ---- Per-match metadata (9167 + replay CDN) ----
+    // A few matches per run under a daily budget; appends to the stored
+    // file. Runs in both check and fetch modes (check only skips the write).
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("building HTTP client")?;
+    let mut meta = load_match_meta(&data_dir().join("match-meta.json"));
+    meta.account_id = cfg.account32();
+    fetch_match_meta(&gc, &http, &rows, &mut meta, write).await?;
+
     // Coalesce in both modes so `check` is a faithful dry run of `fetch`.
     let out_path = out.unwrap_or_else(|| data_dir().join("match-history.json"));
     coalesce_stored_ranked(&mut rows, &out_path);
@@ -996,7 +1345,7 @@ fn run_status() -> Result<()> {
         },
         Err(_) => println!("token:    MISSING — run `login` first"),
     }
-    for name in ["match-history.json", "rank-data.json", "hero-mmr.json"] {
+    for name in ["match-history.json", "rank-data.json", "hero-mmr.json", "match-meta.json"] {
         match fs::metadata(data_dir().join(name)) {
             Ok(m) => {
                 let age = m

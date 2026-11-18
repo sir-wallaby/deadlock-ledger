@@ -24,6 +24,7 @@ const LOCAL_MATCH_HISTORY_URL = '/data/match-history.json';
 // the first push — both are 404-tolerant).
 const LOCAL_RANK_DATA_URL = '/data/rank-data.json';
 const LOCAL_HERO_MMR_URL = '/data/hero-mmr.json';
+const LOCAL_MATCH_META_URL = '/data/match-meta.json';
 // The updater runs every 10 min and touches the file on every run (even when
 // content is unchanged), so a file older than this means the updater is not
 // running; surface the same staleness banner the API path would.
@@ -237,4 +238,15 @@ export async function getLocalRankedData(accountId) {
     ]);
     if (!rank && !heroMmr) return null;
     return { rank, heroMmr };
+}
+
+// Per-match metadata from the GC poller (match-meta.json): every player's
+// per-match rank block (the authoritative pre/post MMR) + match context.
+// 404-tolerant like the other own-account files — null under dev and until
+// the poller's first metadata push, which the Match MMR section degrades to.
+export async function getLocalMatchMeta(accountId) {
+    if (!isLocalAccount(accountId)) return null;
+    const meta = await fetchLocalJson(LOCAL_MATCH_META_URL);
+    if (!meta || typeof meta.matches !== 'object') return null;
+    return meta;
 }

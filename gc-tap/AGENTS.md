@@ -23,7 +23,7 @@ cargo clippy --all-targets   # keep at zero warnings (default lints)
 
 - config: `~/.config/deadlock-gc-history/config.json`
 - refresh token: `~/.local/share/deadlock-gc-history/refresh_token` (mode 0600)
-- data: `~/.local/share/deadlock-gc-history/` — `match-history.json` (all matches), `rank-data.json` (own-account ranked state: SO cache + GetRankData), `hero-mmr.json` (per-hero relative MMR from GetHeroMMRRankings). The latter two are written only when their source succeeded; both are skipped-if-unchanged (atomic tmp+rename).
+- data: `~/.local/share/deadlock-gc-history/` — `match-history.json` (all matches), `rank-data.json` (own-account ranked state: SO cache + GetRankData), `hero-mmr.json` (per-hero relative MMR from GetHeroMMRRankings), `match-meta.json` (per-match metadata — see Output contract). The latter three are written only when their source succeeded; all are skipped-if-unchanged (atomic tmp+rename).
 
 ## Vendored dependencies — read before touching Steam protocol code
 
@@ -36,6 +36,25 @@ cargo clippy --all-targets   # keep at zero warnings (default lints)
 `match-history.json` is a JSON array mirroring `api.deadlock-api.com /v1/players/{id}/match-history` (fields in `MatchOut`, `src/main.rs`). Downstream consumer: the `deadlock-lwc` container. Preserve the shape when changing output.
 
 The 5 ranked fields on `MatchOut` (`ranked_display_badge`, `ranked_delta`, `ranked_calibration_match`, `ranked_used_demotion_protection`, `low_pri_pool`) are `Option`s serialized as `null` when unset. **The GC gates them on `game_mode` + `match_mode` + `rank_interval` all being set** on the request (live-verified Nov 17 2026: a plain call leaves every `has_*` false; `game_mode=Normal` + `match_mode=Ranked` + `rank_interval=<n>` returns the whole interval's ranked history in one response, every row carrying the fields; `ranked_type` is irrelevant). `fetch_matches` fires that interval-scoped call after the main pages (best effort — a failure only costs the fresh fields), merges by `match_id` (the interval row wins — it is a field-wise superset), and coalesces the fields from the previously stored file (older intervals are never re-fetched; stored values are never cleared). `ranked_display_badge` is the POST-match badge. Don't drop the fields to "simplify" — the app keys badge UI off them.
+
+`match-meta.json` (own account only — the GC will not serve other players' metadata) holds per-match detail from the 9167 pipeline (see below). Shape:
+
+```
+{ account_id, fetched_at,
+  matches: { <match_id>: {
+      start_time, game_mode, match_mode, winning_team, not_scored,
+      ranked_type, rank_interval, team_score,
+      street_brawl_rounds: [{ duration_s, winning_team }],
+      players: [{ account_id, player_slot, team, hero_id, kills, deaths,
+                  assists, mvp_rank, rank: { … } | <absent> }],
+      fetched_at } },
+  missing: [ <match_id>, … ] }
+```
+
+- The `rank` key (`CMsgMatchPlayerRankData` — see Per-match rank data) is present **only for ranked matches** and **only when the player was ranked** in the match; it is *omitted* (not `null`) otherwise, and unset fields inside it serialize as `null`. The frontend reads `p.rank || null` — preserve that.
+- `missing` is a **tombstone list**: match ids the GC answers `InvalidMatch`/`InvalidPermission` for (permanent). They are never retried and never stored as matches. Don't "clean" them out — they keep the pending set from re-hitting dead ids every run.
+- The file is **append-only by design** (new matches accumulate; nothing is ever removed). The frontend only ever looks up specific `match_id`s in it.
+- Downstream consumer: the `deadlock-lwc` container's "Match MMR" section (per-match MMR grid + rank ladder). Preserve the shape when changing output.
 
 ## Ranked interval — season rollover
 
@@ -55,9 +74,9 @@ The 5 ranked fields on `MatchOut` (`ranked_display_badge`, `ranked_delta`, `rank
 
 **SO semantics are only partially understood — re-verify after the next ranked match** before adding UI: `last_match_*` (outcome=1, KDA 0/3/24, no hero) matches **no** match in the full history; `demote_protect_games` is a Unix timestamp (≈2026-09-11, stale-snapshot hint); `rank 19 / max_rank 2 / rank_interval 103 / win_bit_mask 0 / match_count 0` are unexplained; `rank_type 0` (enum only has Invalid/Normal). The per-match `player_rank_data` in match metadata (see next section) partially untangles the shield/delta question.
 
-## GC message catalog + per-match metadata (investigated Nov 18 2026 — reference for frontend work)
+## GC message catalog + per-match metadata (investigated + wired Nov 18 2026)
 
-**Catalog**: `EGCCitadelClientMessages` (`citadel_gcmessages_client.proto:7`) defines all 180 GC type IDs (9010–9312); we use 3. Key unused **read** endpoints:
+**Catalog**: `EGCCitadelClientMessages` (`citadel_gcmessages_client.proto:7`) defines all 180 GC type IDs (9010–9312); we use 4 (9112, 9167, 9271, 9234). Key unused **read** endpoints:
 
 | ID | Message | What it gives |
 |---|---|---|
@@ -69,7 +88,7 @@ The 5 ranked fields on `MatchOut` (`ranked_display_badge`, `ranked_delta`, `rank
 | 9186 / 9195 / 9213 / 9199 / 9280 / 9242 | GetBook / FindHeroBuilds / GetFriendGameStatus / GetAccountMatchReports / HeroReleaseVote / Tarot | cosmetics, community builds, friends' status, reports received, votes |
 | 9203 / 9291 / 9211 / 9172 / 9230–9233 | GetActiveMatches / dev + mod messages | live match list, dev/mod tools |
 
-**Per-match detail pipeline** (verified live Nov 18, own account, zero public API):
+**Per-match detail pipeline** (verified live Nov 18, own account, zero public API) — **wired into `fetch`/`check` as `fetch_match_meta`** (deps `reqwest` + `zstd` + `bzip2` added to `Cargo.toml`):
 
 ```
 GC 9167 {match_id} → {metadata_salt, replay_salt, replay_group_id, replay_valid_through}
@@ -81,8 +100,9 @@ sniff magic bytes → zstd (recent matches) or bzip2 (old) despite the .bz2 exte
 - Our GC session returns the same `metadata_salt` the public API has, **plus** `replay_salt` (the API returned it null) — full `.dem.bz2` replays at `…/{match_id}_{replay_salt}.dem.bz2` are downloadable if ever needed.
 - `replay_valid_through` is **not** a hard expiry: a beta-era file (valid_through 2026-05-06) still downloads today.
 - The vendored protos decode files from both eras — schema stable across a year of game versions.
-- Rate limit: `k_eResult_RateLimited` exists; the ecosystem caps ~40 salt fetches/account/day. We'd do 1–3/day — back off politely.
-- Wiring it up needs new deps in `Cargo.toml`: `reqwest` (HTTP) + `zstd` + `bzip2` (there is no HTTP client today).
+- Rate limit: `k_eResult_RateLimited` exists; the ecosystem caps ~40 salt fetches/account/day. The poller budgets for it: **up to `META_PER_RUN` (3) matches per run, newest-first, hard daily budget `META_DAILY_BUDGET` (40)** counted from stored entries with `fetched_at` ≥ today's UTC start — the file itself is the budget ledger, so the cap survives restarts. 500 ms between fetches.
+- **Failure handling (`MetaOutcome`):** `MatchInFlight`/`TooBusy`/`Timeout` → `NotReady` (transient — retried next run); `InvalidMatch`/`InvalidPermission` → `Missing` (permanent — pushed to `missing`, the run moves on); any other error stops the run (retried next run). A permanent failure must never wedge the backlog — that is why `Missing` exists instead of an `Err`.
+- **`check` consumes the budget too**: it runs the same `fetch_match_meta` with `write=false` (dry run — no file write), but the 9167 + CDN requests are real. The budget ledger is the *stored* file, which check never writes — so a check's fetches are **not** recorded, and the next `fetch` re-fetches the same matches (double-spending the budget for them). At steady state (backlog drained by a `fetch`) both are no-ops.
 
 **`CMsgMatchMetaDataContents`** (common:539) — what each file holds (~40–230 KB compressed):
 
@@ -91,7 +111,16 @@ sniff magic bytes → zstd (recent matches) or bzip2 (old) despite the .bz2 exte
 - **`match_paths`**: every player's movement sampled at 1 s with combat state
 - **per player (all 12)**: KDA, net_worth, last_hits, denies, lane, level, hero, **`death_details[]`** (time, TTK, killer, positions), **`items[]`** (full buy history incl. upgrades/imbues/sells), **`stats[]`** time series (dmg dealt / **dmg taken**, healing, accuracy, gold breakdown), pings, `ability_stats[]`, **`mvp_rank`** (top-3 only), **`accolades[]`** (25+ stat IDs), rewards, **`player_rank_data`**
 
-**Per-match rank data** (`CMsgMatchPlayerRankData`, common:528): `desired_progress_change` is the **raw MM delta pre-shield** (−350 both Nov 16/17); the history `ranked_delta` is the applied one (Nov 16: −150, shield absorbed 200, badge held at 26; Nov 17: −350, badge 26→25). Better source than the SO for shield/delta semantics — re-verify after the next ranked match before building rank UI off it.
+**Per-match rank data** (`CMsgMatchPlayerRankData`, common:528) — **the authoritative own-account per-match MMR source** (do not re-hunt for it: it is NOT the SO, NOT the hero-mmr `relative_mmr`, and NOT reliably in the GC history):
+
+- `initial_flat_progress` / `final_flat_progress` = the actual MMR before/after the match — the number the user sees for their own account. Internally consistent across matches (each match's `initial` = the previous match's `final`). **Use these for real MMR, never the history `ranked_delta`.** (Also present in the demo — msg 316 PostMatchDetails, per-player f32 rank block — but the 9167 metadata is the lighter source. The *hero* MMR that the game displays for *other* players diverges from overall MMR and is unavailable from either.)
+- `desired_progress_change` = raw MM delta pre-shield (−350 on all three recent losses).
+- `consumed_demotion_protection` = a demotion-shield protection was spent on this match.
+- **Data-quality (verified Nov 18):** the history `ranked_delta` is **inconsistent** — it equals the *desired* delta for 138370232 (−350) and 138897282 (−350) but the *applied* delta for 138604348 (−150). Don't trust it for actual MMR change. And 138897282's history `ranked_used_demotion_protection` = false while the metadata `consumed_demotion_protection` = true (metadata is internally consistent — progress held 11500 — so the history flag looks wrong there).
+- **Demotion mechanic (official wiki + user, Nov 18):** sub-ranks are **1000 rank points** apart; a full rank is **1500** from its final sub-rank. A loss is **clamped at a sub-rank border** — you cannot cross into a lower sub-rank within the same match, so the loss is reduced to land exactly on the border (that is why 138604348 was −150, not −350: a full loss would have crossed Seeker VI → Seeker V). **Rank protection** (the shield icons) is granted *on reaching a sub-rank's lowest threshold*: **1 protected match** at a sub-rank border, **3** at a full-rank border; it resets on rank-up and Phantom/Ascendant/Eternus have none. The badge drops on the match that spends the last protection — so the badge can fall while MMR holds at the border (138897282: 11500→11500, badge 26→25). Seeker VI / Seeker V border = MMR **11500** (= the Seeker VI threshold in the rank-points scale below; the earlier "~1200" guess is resolved).
+- Verified (user, S2, all hero 19): 138370232 12000→11650 (−350, no shield) · 138604348 11650→11500 (−150, shield spent) · 138897282 11500→11500 (0, shield spent). Current MMR **11500**.
+
+**Rank-points scale (what `flat_progress` means):** the metadata `flat_progress` **is** the cumulative rank-points ladder (Initiate I = 0) — not a separate hidden MMR. Formula: `points(rank R, subrank S) = (R−1)×6500 + (S−1)×1000` for R=1..10 (Initiate..Ascendant), S=1..6 (I..VI); Eternus starts at 65,000 and is percentile-based above. Rank starts: Initiate 0 · Seeker 6,500 · Acolyte 13,000 · Sentinel 19,500 · Mystic 26,000 · Ritualist 32,500 · Emissary 39,000 · Oracle 45,500 · Phantom 52,000 · Ascendant 58,500 · Eternus 65,000. Hence **Seeker VI threshold = 11,500** — exactly the user's demotion border (resolves the earlier "~1200" guess). Any `flat_progress` maps to a badge + sub-rank + distance-to-border by this table, so the per-match visual can derive the progress bar, the clamp point, and the protection state directly. (Source: deadlocknews.org/ranked, cross-checked against the user's matches.)
 
 **Brawl**: `game_mode` 4 = StreetBrawl (enum: 1 Normal, 2 1v1Test, 3 Sandbox, 4 StreetBrawl, 5 ExploreNYC, 6 Internal); `match_mode` 8 = NewPlayerPlacement. The 9112 `Match` message already carries `brawl_score_team0/1` + `brawl_avg_round_time_s` — `MatchOut` already maps them (they're in the JSON, unused by the UI); the frontend `gameModeLabel` already labels 4 "Street Brawl". The user's oldest match (75793262) is a brawl: 8p, `team_score [3,1]`, 4 rounds, full per-player stats present.
 
@@ -99,9 +128,10 @@ sniff magic bytes → zstd (recent matches) or bzip2 (old) despite the .bz2 exte
 
 ## Deployment
 
-`./push.sh` (repo root): runs the release binary's `fetch`, then pushes all three data files to host `wtaylor-deb` at `~/deadlock-lwc-data/` (which the `deadlock-lwc` container serves read-only at `/data/`), per file:
+`./push.sh` (repo root): runs the release binary's `fetch`, then pushes all four data files to host `wtaylor-deb` at `~/deadlock-lwc-data/` (which the `deadlock-lwc` container serves read-only at `/data/`), per file:
 
 - **match-history.json** — heartbeat: if the sha256 is unchanged it `touch`es the remote file so the mtime still advances (the app judges local-data freshness by mtime — an idle stretch without new matches must not read as a dead poller). Changed content is pushed atomically (tmp+rename).
 - **rank-data.json / hero-mmr.json** — skip-if-unchanged (no touch); absent locally (source fetch failed) → skipped.
+- **match-meta.json** — skip-if-unchanged (no touch; the app does no mtime staleness check on this file — it looks up specific match ids); absent locally → skipped. Grows by a few matches per run as the poller drains the metadata backlog (see GC message catalog).
 
 All ssh is BatchMode (key auth must already work). Requires an up-to-date `target/release/deadlock-gc-history`; rebuild before running it.

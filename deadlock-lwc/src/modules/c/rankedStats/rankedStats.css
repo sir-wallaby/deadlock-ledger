@@ -321,6 +321,18 @@
     border-radius: 6px;
 }
 
+.ranked-recent__item--selectable {
+    cursor: pointer;
+}
+
+.ranked-recent__item--selectable:hover {
+    box-shadow: inset 0 0 0 1px var(--lwc-colorBorder, #e5e5e5);
+}
+
+.ranked-recent__item--selected {
+    box-shadow: inset 0 0 0 2px var(--lwc-colorTextWeak, #74685e);
+}
+
 .ranked-recent__badge {
     flex: 0 0 auto;
     min-width: 2.2rem;
@@ -367,5 +379,289 @@
 .ranked-recent__when {
     flex: 0 0 auto;
     font-size: 0.75rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+/* ---- Match MMR (per-match metadata) ---- */
+
+.match-mmr__title {
+    margin-bottom: 0.5rem;
+}
+
+.match-mmr__header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.match-mmr__outcome {
+    flex: 0 0 auto;
+    min-width: 2.2rem;
+    text-align: center;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 4px;
+    color: var(--lwc-colorBackground, #ffffff);
+}
+
+.match-mmr__outcome--win {
+    background: var(--lwc-colorPositive, #2e844a);
+}
+
+.match-mmr__outcome--loss {
+    background: var(--lwc-colorNegative, #ea001e);
+}
+
+.match-mmr__outcome--muted {
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__when {
+    font-size: 0.8rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__hero-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+}
+
+.match-mmr__hero-name {
+    font-weight: 600;
+}
+
+.match-mmr__kda {
+    font-size: 0.85rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+    font-variant-numeric: tabular-nums;
+}
+
+.match-mmr__calib {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+}
+
+.match-mmr__teams {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .match-mmr__teams {
+        grid-template-columns: 1fr;
+    }
+}
+
+.match-mmr__team-head {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--lwc-colorTextWeak, #74685e);
+    margin-bottom: 0.3rem;
+}
+
+.match-mmr__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+/* Own row: the only one with a name, so it gets the highlight. */
+.match-mmr__row--own {
+    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
+    box-shadow: inset 0 0 0 1px var(--lwc-colorBorder, #e5e5e5);
+}
+
+.match-mmr__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+    min-width: 3.6rem;
+}
+
+.match-mmr__badge-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.match-mmr__badge-numeral {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__badge-text {
+    font-size: 0.75rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__mmr {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    color: var(--lwc-colorText, #181818);
+}
+
+.match-mmr__delta {
+    flex: 0 0 auto;
+    min-width: 2.8rem;
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.match-mmr__delta--up {
+    color: var(--lwc-colorPositive, #2e844a);
+}
+
+.match-mmr__delta--down {
+    color: var(--lwc-colorNegative, #ea001e);
+}
+
+.match-mmr__delta--flat {
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__shield {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    fill: var(--lwc-colorTextWeak, #74685e);
+}
+
+/* ---- Rank ladder bar ---- */
+
+.match-mmr__ladder {
+    margin-bottom: 0.75rem;
+}
+
+.match-mmr__ladder-bar {
+    position: relative;
+    height: 14px;
+    border-radius: 7px;
+    background: var(--lwc-colorTrack, #ecebe9);
+    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
+}
+
+.match-mmr__ladder-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--lwc-colorBorder, #e5e5e5);
+}
+
+.match-mmr__ladder-tick--rank {
+    width: 2px;
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__ladder-marker {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 3px;
+    border-radius: 2px;
+    transform: translateX(-50%);
+}
+
+.match-mmr__ladder-marker--before {
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__ladder-marker--after {
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+/* Sign colors for the after marker (defined after --after so they win). */
+.match-mmr__ladder-marker--up {
+    background: var(--lwc-colorPositive, #2e844a);
+}
+
+.match-mmr__ladder-marker--down {
+    background: var(--lwc-colorNegative, #ea001e);
+}
+
+.match-mmr__ladder-sublabels {
+    position: relative;
+    height: 1rem;
+    margin-top: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__ladder-sublabels span {
+    position: absolute;
+    transform: translateX(-50%);
+}
+
+.match-mmr__ladder-ranklabels {
+    position: relative;
+    height: 1rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--lwc-colorText, #181818);
+}
+
+.match-mmr__ladder-ranklabels span {
+    position: absolute;
+}
+
+.match-mmr__ladder-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__ladder-swatch {
+    display: inline-block;
+    width: 3px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__summary {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--lwc-colorText, #181818);
+}
+
+.match-mmr__summary-badge {
+    font-weight: 700;
+    margin-right: 0.5rem;
+}
+
+.match-mmr__summary-note {
+    color: var(--lwc-colorTextWeak, #74685e);
+}
+
+.match-mmr__pending {
+    margin: 0;
+    font-size: 0.85rem;
     color: var(--lwc-colorTextWeak, #74685e);
 }
