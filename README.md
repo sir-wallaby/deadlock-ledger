@@ -8,6 +8,18 @@ single-page web dashboard.
 > **Status: initial.** The backend is stable and the ranked dashboard is live,
 > but the frontend is still being developed. See [Status](#status).
 
+## Screenshots
+
+![Ranked dashboard — rank card, MMR history, ranked heroes, match list](docs/screenshots/ranked-dashboard.png)
+
+The ranked season dashboard: rank card with in-subrank progress, MMR history
+chart, per-hero record, and the season's match list.
+
+![Match MMR — per-player MMR before/after with rank ladder](docs/screenshots/match-mmr.png)
+
+The Match MMR section: every player's MMR before → after the match, both
+teams' averages, and the own-account rank ladder.
+
 ## The idea
 
 A personal stat tracker for Deadlock across **Standard, Brawl, and Ranked**.
