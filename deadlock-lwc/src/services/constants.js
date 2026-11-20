@@ -39,6 +39,12 @@ export function seasonIndexFor(timestampSec) {
 export const CALIBRATION_MATCHES = 8;
 export const RANKED_POINTS_PER_MATCH = 350;
 
+// Faction name per lobby team index. The GC metadata only carries the index
+// (ECitadelLobbyTeam 0/1 — no faction field), but the mapping is a stable
+// game-side fact, verified 7/7 of the account's matches against a third-party
+// tracker (Nov 19 2026): team 0 is always The Hidden King, team 1 The Archmother.
+export const TEAM_FRACTIONS = { 0: 'The Hidden King', 1: 'The Archmother' };
+
 // Rank-points ladder — what the per-match metadata's `flat_progress` means:
 // cumulative rank points, Initiate I = 0. points(R, S) = (R-1)*6500 +
 // (S-1)*1000 for R = 1..10 (Initiate..Ascendant), S = 1..6 (I..VI); subrank
@@ -61,6 +67,19 @@ export const RANK_NAMES = {
     9: 'Phantom',
     10: 'Ascendant',
     11: 'Eternus'
+};
+
+// The rank's material (deadlock.wiki "Material" column) — the secondary name
+// on the badge. Phantom and above have none.
+export const RANK_MATERIALS = {
+    1: 'Brick',
+    2: 'Stone',
+    3: 'Iron',
+    4: 'Bronze',
+    5: 'Silver',
+    6: 'Gold',
+    7: 'Platinum',
+    8: 'Diamond'
 };
 
 export const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI' };
@@ -95,7 +114,7 @@ export function rankForPoints(points) {
 // subrank 1..6 (I..VI). Badge 0 = Obscurus (calibration / unrated).
 export function decodeBadge(badge) {
     if (!badge) {
-        return { rank: 0, subrank: 0, name: 'Obscurus', numeral: '', icon: '' };
+        return { rank: 0, subrank: 0, name: 'Obscurus', numeral: '', material: '', icon: '' };
     }
     const rank = Math.floor(badge / 10);
     const subrank = badge % 10;
@@ -105,8 +124,18 @@ export function decodeBadge(badge) {
         subrank,
         name,
         numeral: ROMAN[subrank] || '',
+        material: RANK_MATERIALS[rank] || '',
         icon: rankIcon(name)
     };
+}
+
+// Display name for a badge: "Seeker V (Stone)". Obscurus passes through.
+export function rankLabel(badge) {
+    const r = decodeBadge(badge);
+    if (r.rank === 0) return r.name;
+    let s = r.numeral ? `${r.name} ${r.numeral}` : r.name;
+    if (r.material) s += ` (${r.material})`;
+    return s;
 }
 
 // The 11 user-provided base badges (no baked-in numeral) live in

@@ -10,6 +10,7 @@
         <section class="player-bar slds-m-bottom_medium">
             <lightning-avatar
                 class="player-bar__avatar slds-m-right_small"
+                src={avatarUrl}
                 initials={playerInitials}
                 alternative-text={player.personaname}
                 size="large"
@@ -54,29 +55,10 @@
                         <p>{staleMessage}</p>
                     </div>
                 </template>
-                <template if:true={showRecentMatches}>
-                    <section class="recent slds-m-bottom_medium">
-                        <h2 class="recent__title slds-text-heading_small">
-                            Last 3 matches <span class="recent__tz">(Eastern time)</span>
-                        </h2>
-                        <ul class="recent__list">
-                            <template for:each={recentMatches} for:item="match">
-                                <li key={match.key} class="recent__item">
-                                    <span class={match.badgeClass}>{match.label}</span>
-                                    <img src={match.icon} alt="" class="recent__icon" />
-                                    <span class="recent__hero slds-truncate" title={match.name}>{match.name}</span>
-                                    <span class="recent__mode">{match.modeText}</span>
-                                    <span class="recent__when">{match.when}</span>
-                                </li>
-                            </template>
-                        </ul>
-                    </section>
-                </template>
                 <template if:true={showRanked}>
                     <c-ranked-stats
                         ranked-matches={rankedMatches}
                         hero-map={heroMap}
-                        local-ranked={localRanked}
                         match-meta={matchMeta}
                     ></c-ranked-stats>
                 </template>

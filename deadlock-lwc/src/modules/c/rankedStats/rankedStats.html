@@ -15,14 +15,18 @@
                 </div>
                 <div class="rank-card__main">
                     <div class="rank-card__title">{rankTitle}</div>
-                    <template if:true={points}>
+                    <template if:true={mmr}>
                         <div class="rank-card__points">
                             <div class="rank-card__points-label">
-                                {points.value} / {points.max} ranked points
+                                <span class="rank-card__mmr">{mmr.label}</span>
+                                <span class="rank-card__mmr-unit">MMR</span>
+                                <span class="rank-card__mmr-to">{mmr.toLabel}</span>
                             </div>
-                            <div class="rank-card__points-track">
-                                <div class="rank-card__points-fill" style={pointsFillStyle}></div>
-                            </div>
+                            <template if:true={mmr.hasBar}>
+                                <div class="rank-card__points-track">
+                                    <div class="rank-card__points-fill" style={mmrFillStyle}></div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                     <div class="rank-card__chips">
@@ -32,11 +36,9 @@
                         <template if:true={shieldUsed}>
                             <span class="chip chip--shield">Shield used</span>
                         </template>
-                        <span class="chip chip--form">
-                            <span class="chip__label">Form</span>
-                            <template for:each={form} for:item="f">
-                                <span key={f.i} class={f.cls}>{f.label}</span>
-                            </template>
+                        <span class="chip chip--record">
+                            <span class="chip__label">Season</span>
+                            <span class="chip__value">{seasonRecord.wins}W {seasonRecord.losses}L</span>
                         </span>
                     </div>
                 </div>
@@ -44,25 +46,15 @@
         </section>
     
         <section class="chart-card slds-box slds-m-bottom_medium">
-            <h2 class="chart-card__title slds-text-heading_small">Rank history — this season</h2>
+            <h2 class="chart-card__title slds-text-heading_small">MMR history — this season</h2>
             <template if:true={chart}>
                 <svg
                     class="chart-card__svg"
                     viewBox={chart.viewBox}
                     xmlns="http://www.w3.org/2000/svg"
                     role="img"
-                    aria-label="Ranked badge history"
+                    aria-label="Ranked MMR history"
                 >
-                    <template if:true={chart.calibBand}>
-                        <rect
-                            x={chart.calibBand.x}
-                            y={chart.padT}
-                            width={chart.calibBand.w}
-                            height={chart.plotH}
-                            class="chart__calib"
-                        ></rect>
-                        <text x={chart.padL} y={chart.calibLabelY} class="chart__calib-label">Calibration</text>
-                    </template>
                     <template for:each={chart.gridlines} for:item="g">
                         <g key={g.key}>
                             <line
@@ -70,9 +62,9 @@
                                 x2={chart.plotRight}
                                 y1={g.y}
                                 y2={g.y}
-                                class="chart__grid"
+                                class={g.cls}
                             ></line>
-                            <text x={chart.labelX} y={g.labelY} class="chart__grid-label">{g.label}</text>
+                            <text x={chart.labelX} y={g.labelY} class={g.labelCls}>{g.label}</text>
                         </g>
                     </template>
                     <polyline points={chart.polyline} class="chart__line"></polyline>
@@ -81,27 +73,15 @@
                             <title>{p.tooltip}</title>
                         </circle>
                     </template>
+                    <template for:each={chart.xlabels} for:item="l">
+                        <text key={l.key} x={l.x} y={chart.xLabelY} class="chart__x-label">{l.text}</text>
+                    </template>
                 </svg>
             </template>
             <template if:false={chart}>
-                <p class="chart-card__none">No rank data for this season yet.</p>
+                <p class="chart-card__none">No MMR data for this season yet.</p>
             </template>
         </section>
-    
-        <template if:true={showMmr}>
-            <section class="mmr-card slds-box slds-m-bottom_medium">
-                <h2 class="mmr-card__title slds-text-heading_small">Hero MMR</h2>
-                <div class="mmr-card__list">
-                    <template for:each={mmrHeroes} for:item="h">
-                        <div key={h.id} class="mmr-card__item">
-                            <img src={h.icon} alt="" class="mmr-card__icon" />
-                            <span class="mmr-card__name slds-truncate" title={h.name}>{h.name}</span>
-                            <span class={h.cls}>{h.value}</span>
-                        </div>
-                    </template>
-                </div>
-            </section>
-        </template>
     
         <section class="ranked-heroes slds-m-bottom_medium">
             <h2 class="ranked-heroes__title slds-text-heading_small">Ranked heroes — this season</h2>
@@ -146,10 +126,10 @@
     
         <section class="ranked-recent slds-m-bottom_medium">
             <h2 class="ranked-recent__title slds-text-heading_small">
-                Recent ranked <span class="ranked-recent__tz">(Eastern time)</span>
+                Ranked matches — this season <span class="ranked-recent__tz">(Eastern time)</span>
             </h2>
             <ul class="ranked-recent__list">
-                <template for:each={recent} for:item="m">
+                <template for:each={seasonMatches} for:item="m">
                     <li
                         key={m.key}
                         class={m.itemClass}
@@ -184,7 +164,15 @@
                 <template if:true={matchMmr.hasEntry}>
                     <div class="match-mmr__teams">
                         <div class="match-mmr__team">
-                            <div class="match-mmr__team-head">Team 0</div>
+                            <div class="match-mmr__team-head">
+                                <div class="match-mmr__team-name">{matchMmr.team0Name}</div>
+                                <template if:true={matchMmr.team0Avg}>
+                                    <div
+                                        class="match-mmr__team-avg"
+                                        title="Average post-match MMR — players with a revealed rank (mid-calibration players have none yet)"
+                                    >{matchMmr.team0Avg}</div>
+                                </template>
+                            </div>
                             <template for:each={matchMmr.team0} for:item="p">
                                 <div key={p.key} class={p.rowClass}>
                                     <img src={p.icon} alt="" class="match-mmr__hero-icon" />
@@ -213,7 +201,15 @@
                             </template>
                         </div>
                         <div class="match-mmr__team">
-                            <div class="match-mmr__team-head">Team 1</div>
+                            <div class="match-mmr__team-head">
+                                <div class="match-mmr__team-name">{matchMmr.team1Name}</div>
+                                <template if:true={matchMmr.team1Avg}>
+                                    <div
+                                        class="match-mmr__team-avg"
+                                        title="Average post-match MMR — players with a revealed rank (mid-calibration players have none yet)"
+                                    >{matchMmr.team1Avg}</div>
+                                </template>
+                            </div>
                             <template for:each={matchMmr.team1} for:item="p">
                                 <div key={p.key} class={p.rowClass}>
                                     <img src={p.icon} alt="" class="match-mmr__hero-icon" />

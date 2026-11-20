@@ -20,10 +20,6 @@ const SEASON_STARTS = [
 // for this account; anything else (and any failure) falls back to the API.
 export const LOCAL_ACCOUNT_ID = 199434043;
 const LOCAL_MATCH_HISTORY_URL = '/data/match-history.json';
-// Own-account ranked state from the GC poller (absent under dev / before
-// the first push — both are 404-tolerant).
-const LOCAL_RANK_DATA_URL = '/data/rank-data.json';
-const LOCAL_HERO_MMR_URL = '/data/hero-mmr.json';
 const LOCAL_MATCH_META_URL = '/data/match-meta.json';
 // The updater runs every 10 min and touches the file on every run (even when
 // content is unchanged), so a file older than this means the updater is not
@@ -173,13 +169,6 @@ export async function getPlayerHeroStats(accountId, {
         h.assists += m.player_assists || 0;
         if (m.start_time > h.last_played) h.last_played = m.start_time;
     }
-    // Newest three Standard matches, for the "last played" display. Scoped to
-    // Standard (game_mode 1) to match the per-hero aggregation above; a
-    // ranked-only filter can be layered on later.
-    const recentMatches = matches
-        .filter((m) => m.start_time && m.game_mode === STANDARD_GAME_MODE)
-        .sort((a, b) => b.start_time - a.start_time)
-        .slice(0, 3);
     // Ranked matches for the chart/rank card: scoped to the newest season in
     // which the player actually played ranked (an S1-only player sees their
     // S1 run, not an empty S2), newest first. Ranked fields come from the
@@ -201,7 +190,6 @@ export async function getPlayerHeroStats(accountId, {
                   .sort((a, b) => b.start_time - a.start_time);
     return {
         stats: Array.from(byHero.values()),
-        recentMatches,
         rankedMatches,
         fresh,
         rateLimited,
@@ -225,19 +213,6 @@ async function fetchLocalJson(url) {
     } catch {
         return null;
     }
-}
-
-// Own-account ranked state: rank-data.json (SO cache + GetRankData) and
-// hero-mmr.json (GetHeroMMRRankings). Only the local account has these
-// files; for anyone else (and when both are missing) returns null.
-export async function getLocalRankedData(accountId) {
-    if (!isLocalAccount(accountId)) return null;
-    const [rank, heroMmr] = await Promise.all([
-        fetchLocalJson(LOCAL_RANK_DATA_URL),
-        fetchLocalJson(LOCAL_HERO_MMR_URL)
-    ]);
-    if (!rank && !heroMmr) return null;
-    return { rank, heroMmr };
 }
 
 // Per-match metadata from the GC poller (match-meta.json): every player's

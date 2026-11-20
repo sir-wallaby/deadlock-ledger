@@ -7,6 +7,7 @@
 #   rank-data.json      own-account ranked state (SO cache + GetRankData)
 #   hero-mmr.json       per-hero relative MMR (GetHeroMMRRankings)
 #   match-meta.json     per-match metadata (per-match MMR + match info)
+#   avatar.jpg          account's Steam avatar (profile-page og:image)
 set -eu
 
 BIN=/home/wtaylor/Repo/deadlock-ledger/gc-tap/target/release/deadlock-gc-history
@@ -45,6 +46,6 @@ push_file() {
   echo "pushed $NAME"
 }
 
-for NAME in match-history.json rank-data.json hero-mmr.json match-meta.json; do
+for NAME in match-history.json rank-data.json hero-mmr.json match-meta.json avatar.jpg; do
   push_file "$NAME"
 done

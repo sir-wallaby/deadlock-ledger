@@ -6,17 +6,22 @@ import {
     RANK_POINTS_PER_RANK,
     RANK_POINTS_PER_SUBRANK,
     ETERNUS_POINTS,
+    TEAM_FRACTIONS,
     decodeBadge,
-    rankForPoints
+    rankForPoints,
+    rankLabel
 } from '../../../../services/constants.js';
 import { isMatchScored, isMatchWon } from '../../../../services/outcomes.js';
 import { LOCAL_ACCOUNT_ID } from '../../../../services/deadlockApi.js';
 
-// SVG geometry (viewBox units); the right padding holds the rank-name labels.
-const CHART = { w: 600, h: 170, padL: 10, padR: 76, padT: 22, padB: 14, dot: 4.5 };
+// SVG geometry (viewBox units); right padding holds the subrank labels,
+// bottom padding the date labels.
+const CHART = { w: 600, h: 170, padL: 10, padR: 76, padT: 10, padB: 24, dot: 4.5 };
+
+const ET_TIME_ZONE = 'America/New_York';
 
 const ET_FORMATTER = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: ET_TIME_ZONE,
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -32,6 +37,20 @@ function formatEt(timestamp) {
     }
 }
 
+const ET_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_TIME_ZONE,
+    month: 'short',
+    day: 'numeric'
+});
+
+function formatDate(timestamp) {
+    try {
+        return ET_DATE_FORMATTER.format(new Date(timestamp * 1000));
+    } catch {
+        return '';
+    }
+}
+
 function isCalibration(m) {
     return m.ranked_calibration_match > 0;
 }
@@ -40,6 +59,16 @@ function deltaText(delta) {
     if (delta === null || delta === undefined) return '—';
     if (delta > 0) return `+${delta}`;
     return delta === 0 ? '0' : `−${Math.abs(delta)}`;
+}
+
+// The rank/subrank name at the top of a subrank span: the next subrank of
+// the same rank, or the next rank's I (Eternus above Ascendant VI).
+function borderName(info) {
+    if (info.subrank < 6) {
+        return `${RANK_NAMES[info.rank]} ${ROMAN[info.subrank + 1]}`;
+    }
+    const next = info.rank + 1;
+    return next === 11 ? RANK_NAMES[11] : `${RANK_NAMES[next]} I`;
 }
 
 // Rank-ladder bar for one match: the window spans the full rank(s) covered
@@ -127,16 +156,14 @@ function buildLadder(before, after) {
 
 export default class RankedStats extends LightningElement {
     // Raw ranked rows for the current season, newest first (from
-    // getPlayerHeroStats). heroMap: hero_id -> hero metadata. localRanked:
-    // { rank, heroMmr } from the GC poller, own account only (null otherwise).
+    // getPlayerHeroStats). heroMap: hero_id -> hero metadata.
     // matchMeta: the poller's match-meta.json ({ matches: { id: entry } }),
     // own account only (null otherwise / under dev).
     @api rankedMatches = [];
     @api heroMap = new Map();
-    @api localRanked = null;
     @api matchMeta = null;
 
-    // The recent-list row the user selected for the Match MMR section. null =
+    // The matches-list row the user selected for the Match MMR section. null =
     // auto (newest ranked match that has metadata).
     @track selectedMatchId = null;
 
@@ -168,24 +195,67 @@ export default class RankedStats extends LightningElement {
 
     get rankTitle() {
         const r = this.rankInfo;
-        return r.numeral ? `${r.name} ${r.numeral}` : r.name;
+        let t = r.numeral ? `${r.name} ${r.numeral}` : r.name;
+        if (r.material) t += ` (${r.material})`;
+        return t;
     }
 
-    // Points bar from the SO cache — own account only.
-    get points() {
-        const rank = this.localRanked && this.localRanked.rank;
-        if (!rank || rank.progress === null || rank.progress === undefined) return null;
-        const max = rank.max_progress || 0;
-        return {
-            value: rank.progress,
-            max,
-            pct: max ? Math.min(100, Math.round((rank.progress / max) * 100)) : 0
+    // The own-account post-match MMR (match-meta final_flat_progress) for a
+    // match — the number the in-game screen shows after it. null until the
+    // poller has metadata for it, and null while the rank is unrevealed
+    // (mid-calibration: the progress values are 0–245 placeholders, not MMR).
+    ownMmr(m) {
+        const meta = this.matchMeta;
+        if (!meta || !meta.matches) return null;
+        const entry = meta.matches[m.match_id];
+        if (!entry) return null;
+        const own = entry.players.find((p) => p.account_id === LOCAL_ACCOUNT_ID);
+        const r = own && own.rank;
+        if (!r || (r.initial_display_rank || 0) === 0) return null;
+        const v = r.final_flat_progress;
+        return v === null || v === undefined ? null : v;
+    }
+
+    // Current MMR = the newest ranked match with metadata. null until the
+    // poller has metadata for at least one.
+    get mmr() {
+        for (const m of this.rankedMatches) {
+            const value = this.ownMmr(m);
+            if (value === null) continue;
+            return this.mmrInfo(value);
+        }
+        return null;
+    }
+
+    // Ladder position of an MMR value: fill within the current subrank and
+    // the distance to the next border (subrank, or the next rank's I).
+    // Eternus has no fixed end — no bar.
+    mmrInfo(value) {
+        const info = rankForPoints(value);
+        const out = {
+            label: value.toLocaleString('en-US'),
+            hasBar: info.subrankEnd !== null,
+            pct: 0,
+            toLabel: ''
         };
+        if (info.subrankEnd !== null) {
+            out.pct = Math.max(
+                0,
+                Math.min(
+                    100,
+                    Math.round(
+                        ((value - info.subrankStart) / (info.subrankEnd - info.subrankStart)) * 100
+                    )
+                )
+            );
+            out.toLabel = `${(info.subrankEnd - value).toLocaleString('en-US')} to ${borderName(info)}`;
+        }
+        return out;
     }
 
-    get pointsFillStyle() {
-        const p = this.points;
-        return p ? `width: ${p.pct}%` : '';
+    get mmrFillStyle() {
+        const m = this.mmr;
+        return m && m.hasBar ? `width: ${m.pct}%` : '';
     }
 
     // Max known calibration number — the API misses some calibration rows,
@@ -212,113 +282,140 @@ export default class RankedStats extends LightningElement {
         return !!(newest && newest.ranked_used_demotion_protection === true);
     }
 
-    // Last 8 outcomes, most recent left.
-    get form() {
-        return this.rankedMatches.slice(0, 8).map((m, i) => {
-            const scored = isMatchScored(m);
-            const won = scored && isMatchWon(m);
-            return {
-                i,
-                label: scored ? (won ? 'W' : 'L') : '–',
-                cls:
-                    'form__dot' + (scored ? (won ? ' form__dot--win' : ' form__dot--loss') : '')
-            };
-        });
+    // Season record over scored ranked matches — replaces the old W/L dot
+    // strip (the matches list below already shows every outcome).
+    get seasonRecord() {
+        let wins = 0;
+        let losses = 0;
+        for (const m of this.rankedMatches) {
+            if (!isMatchScored(m)) continue;
+            if (isMatchWon(m)) wins += 1;
+            else losses += 1;
+        }
+        return { wins, losses };
     }
 
-    // ---- Badge chart ----
+    // ---- MMR chart ----
 
     get chart() {
         // Prop is newest-first; the chart runs oldest → newest, left → right.
+        // Y = post-match MMR (match-meta), which moves ~±350 a match — the
+        // badge barely moves over a season, so it can't show the swings.
         const rows = [...this.rankedMatches].reverse();
         const n = rows.length;
         if (n === 0) return null;
 
-        const badges = rows.map((m) => {
-            const b = m.ranked_display_badge;
-            return b === null || b === undefined ? null : b;
-        });
-        const firstKnownIdx = badges.findIndex((b) => b !== null);
-        if (firstKnownIdx === -1) return null; // no badge info anywhere — nothing to plot
+        const mmrs = rows.map((m) => this.ownMmr(m));
+        const firstKnownIdx = mmrs.findIndex((v) => v !== null);
+        if (firstKnownIdx === -1) return null; // no MMR data anywhere — nothing to plot
 
         // Carry-forward: unknowns before the first known use the first known
-        // badge, later unknowns use the last known; unknowns render hollow.
+        // value, later unknowns use the last known; unknowns render hollow.
         let lastKnown = null;
+        const plotted = mmrs.map((v, i) => {
+            const known = v !== null;
+            if (known) lastKnown = v;
+            return known ? v : i < firstKnownIdx ? mmrs[firstKnownIdx] : lastKnown;
+        });
+
+        // Zoom window: the MMR range reached, half a subrank (500 pts) of
+        // padding, at least two subranks of span (a flat line still shows
+        // its neighbors).
+        const minV = Math.min(...plotted);
+        const maxV = Math.max(...plotted);
+        let yLo = minV - 500;
+        let yHi = maxV + 500;
+        if (yHi - yLo < 2000) {
+            const mid = (minV + maxV) / 2;
+            yLo = mid - 1000;
+            yHi = mid + 1000;
+        }
+        const span = yHi - yLo;
+        const plotW = CHART.w - CHART.padL - CHART.padR;
+        const plotH = CHART.h - CHART.padT - CHART.padB;
+        const yFor = (v) => CHART.padT + (1 - (v - yLo) / span) * plotH;
+
+        const slot = plotW / n;
         const points = rows.map((m, i) => {
-            const known = badges[i] !== null;
-            if (known) lastKnown = badges[i];
-            const badge = known ? badges[i] : i < firstKnownIdx ? badges[firstKnownIdx] : lastKnown;
+            const known = mmrs[i] !== null;
             const scored = isMatchScored(m);
             const won = scored && isMatchWon(m);
             return {
                 i,
-                badge,
                 known,
-                x: 0,
-                y: 0,
+                x: CHART.padL + (i + 0.5) * slot,
+                y: yFor(plotted[i]),
                 cls:
                     'chart__dot ' +
                     (known ? '' : 'chart__dot--unknown ') +
                     (scored ? (won ? 'chart__dot--win' : 'chart__dot--loss') : 'chart__dot--muted'),
-                tooltip: this.tooltipFor(m, badge, known, scored, won)
+                tooltip: this.tooltipFor(m, mmrs[i], known, scored, won)
             };
         });
 
-        const maxBadge = Math.max(...badges.filter((b) => b !== null));
-        const maxY = Math.max(20, Math.ceil(maxBadge / 10) * 10);
-        const plotW = CHART.w - CHART.padL - CHART.padR;
-        const plotH = CHART.h - CHART.padT - CHART.padB;
-        const slot = plotW / n;
-        points.forEach((p, i) => {
-            p.x = CHART.padL + (i + 0.5) * slot;
-            p.y = CHART.padT + (1 - p.badge / maxY) * plotH;
-        });
-
-        // Calibration band over the leading stretch of calibration matches.
-        let calibIdx = -1;
-        rows.forEach((m, i) => {
-            if (isCalibration(m)) calibIdx = i;
-        });
-        const calibBand = calibIdx >= 0 ? { x: CHART.padL, w: (calibIdx + 1) * slot } : null;
-
-        // Gridlines at rank boundaries; the label is the rank that starts
-        // just above the line (badge r*10+1..r*10+6 is rank r).
+        // Gridline at every subrank boundary (subrank start) inside the
+        // window; rank starts (subrank I) are bold. Label every line unless
+        // the window is wide, in which case only the rank starts.
         const gridlines = [];
-        for (let g = 10; g <= maxY; g += 10) {
-            gridlines.push({
-                key: g,
-                y: CHART.padT + (1 - g / maxY) * plotH,
-                labelY: CHART.padT + (1 - g / maxY) * plotH + 3,
-                label: RANK_NAMES[g / 10] || ''
-            });
+        for (let rank = 1; rank <= 10; rank++) {
+            for (let sub = 1; sub <= 6; sub++) {
+                const v = (rank - 1) * RANK_POINTS_PER_RANK + (sub - 1) * RANK_POINTS_PER_SUBRANK;
+                if (v <= yLo || v >= yHi) continue;
+                gridlines.push({
+                    key: v,
+                    rank,
+                    sub,
+                    y: yFor(v)
+                });
+            }
+        }
+        const labelAll = gridlines.length <= 8;
+        gridlines.forEach((g) => {
+            const labeled = labelAll || g.sub === 1;
+            g.labelY = g.y + 3;
+            g.label = labeled ? `${RANK_NAMES[g.rank]} ${ROMAN[g.sub]}` : '';
+            g.cls = 'chart__grid' + (g.sub === 1 ? ' chart__grid--rank' : '');
+            g.labelCls = 'chart__grid-label' + (g.sub === 1 ? ' chart__grid-label--rank' : '');
+        });
+
+        // Date labels at five even positions (first, quartiles, last),
+        // deduped when the season is short.
+        const xlabels = [];
+        const seen = new Set();
+        for (let i = 0; i < 5; i++) {
+            const idx = Math.round((i * (n - 1)) / 4);
+            if (seen.has(idx)) continue;
+            seen.add(idx);
+            const ts = rows[idx].start_time;
+            if (!ts) continue;
+            xlabels.push({ key: idx, x: points[idx].x, text: formatDate(ts) });
         }
 
         const plotRight = CHART.w - CHART.padR;
         return {
             viewBox: `0 0 ${CHART.w} ${CHART.h}`,
             padL: CHART.padL,
-            padT: CHART.padT,
-            plotH,
             plotRight,
             labelX: plotRight + 6,
-            calibLabelY: 14,
+            xLabelY: CHART.h - 6,
             dot: CHART.dot,
             points,
             polyline: points
                 .map((p) => `${Math.round(p.x * 10) / 10},${Math.round(p.y * 10) / 10}`)
                 .join(' '),
             gridlines,
-            calibBand
+            xlabels
         };
     }
 
-    tooltipFor(m, badge, known, scored, won) {
+    tooltipFor(m, mmr, known, scored, won) {
         const meta = this.heroMap.get(m.hero_id) || {};
-        const r = decodeBadge(badge);
+        const badge = m.ranked_display_badge;
         const parts = [];
         if (m.start_time) parts.push(formatEt(m.start_time));
         parts.push(scored ? (won ? 'Win' : 'Loss') : 'Not scored');
-        parts.push(r.numeral ? `${r.name} ${r.numeral}` : r.name);
+        if (mmr !== null) parts.push(`${mmr.toLocaleString('en-US')} MMR`);
+        if (badge !== null && badge !== undefined) parts.push(rankLabel(badge));
         if (m.ranked_delta !== null && m.ranked_delta !== undefined) {
             parts.push(`${deltaText(m.ranked_delta)} pts`);
         }
@@ -326,37 +423,8 @@ export default class RankedStats extends LightningElement {
         if (isCalibration(m)) {
             parts.push(`Calibration ${m.ranked_calibration_match}/${CALIBRATION_MATCHES}`);
         }
-        if (!known) parts.push('rank carried from nearby match');
+        if (!known) parts.push('MMR carried from nearby match');
         return parts.join(' · ');
-    }
-
-    // ---- Hero MMR strip (own account only) ----
-
-    get showMmr() {
-        return this.mmrHeroes.length > 0;
-    }
-
-    get mmrHeroes() {
-        const mmr = this.localRanked && this.localRanked.heroMmr;
-        if (!mmr || !Array.isArray(mmr.heroes)) return [];
-        // -10 = unplayed default; only heroes actually played in ranked show.
-        return mmr.heroes
-            .filter((h) => h.relative_mmr > -10)
-            .sort((a, b) => b.relative_mmr - a.relative_mmr)
-            .map((h) => {
-                const meta = this.heroMap.get(h.hero_id) || {};
-                const images = meta.images || {};
-                const v = h.relative_mmr;
-                return {
-                    id: h.hero_id,
-                    name: meta.name || `Hero ${h.hero_id}`,
-                    icon: images.icon_hero_card_webp || images.icon_hero_card || '',
-                    value: v > 0 ? `+${v}` : `${v}`,
-                    cls:
-                        'mmr__value' +
-                        (v > 0 ? ' mmr__value--up' : v < 0 ? ' mmr__value--down' : '')
-                };
-            });
     }
 
     // ---- Ranked hero table (current season, scored matches only) ----
@@ -414,10 +482,13 @@ export default class RankedStats extends LightningElement {
         );
     }
 
-    get recent() {
+    // Every ranked match of the season, newest first — the scrollable list
+    // below the chart. Rows with metadata are selectable for the Match MMR
+    // section.
+    get seasonMatches() {
         const metaIds = this.metaIds;
         const selectedId = this.matchMmr && this.matchMmr.selectedId;
-        return this.rankedMatches.slice(0, 5).map((m) => {
+        return this.rankedMatches.map((m) => {
             const meta = this.heroMap.get(m.hero_id) || {};
             const images = meta.images || {};
             const scored = isMatchScored(m);
@@ -493,6 +564,10 @@ export default class RankedStats extends LightningElement {
             calibLabel: '',
             team0: [],
             team1: [],
+            team0Name: TEAM_FRACTIONS[0] || 'Team 0',
+            team1Name: TEAM_FRACTIONS[1] || 'Team 1',
+            team0Avg: '',
+            team1Avg: '',
             ladder: null,
             badgeShift: '',
             pointsText: '',
@@ -510,6 +585,28 @@ export default class RankedStats extends LightningElement {
             out.ownKda = `${own.kills} / ${own.deaths} / ${own.assists}`;
         }
 
+        // Team average = mean post-match MMR over players whose rank is
+        // revealed (initial_display_rank > 0). Mid-calibration players
+        // (cal 1–7) have no real MMR yet — their progress values are
+        // placeholders — so they only count in the denominator gap.
+        const teamAvg = (team) => {
+            const players = entry.players.filter((p) => p.team === team);
+            const vals = players
+                .filter(
+                    (p) =>
+                        p.rank &&
+                        (p.rank.initial_display_rank || 0) > 0 &&
+                        p.rank.final_flat_progress !== null &&
+                        p.rank.final_flat_progress !== undefined
+                )
+                .map((p) => p.rank.final_flat_progress);
+            if (vals.length === 0) return '';
+            const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+            return `avg ${avg.toLocaleString('en-US')} (${vals.length}/${players.length})`;
+        };
+        out.team0Avg = teamAvg(0);
+        out.team1Avg = teamAvg(1);
+
         const rowsFor = (team) =>
             entry.players
                 .filter((p) => p.team === team)
@@ -520,7 +617,8 @@ export default class RankedStats extends LightningElement {
 
         const r = own && own.rank;
         // Calibration: the history row's per-season number is authoritative;
-        // meta's initial_calibration_games is the pre-match count (+1 = this).
+        // meta's initial_calibration_games is the REMAINING count incl. this
+        // match (8 on the first calib match → 1 on the last, 0 on real ones).
         const isCalib =
             (m.ranked_calibration_match || 0) > 0 ||
             (!r || r.initial_display_rank === 0);
@@ -528,7 +626,7 @@ export default class RankedStats extends LightningElement {
             const n =
                 m.ranked_calibration_match ||
                 (r && r.initial_calibration_games
-                    ? r.initial_calibration_games + 1
+                    ? CALIBRATION_MATCHES - r.initial_calibration_games + 1
                     : 0);
             out.calibLabel = `Calibration ${n}/${CALIBRATION_MATCHES}`;
             if (r) {
@@ -586,11 +684,12 @@ export default class RankedStats extends LightningElement {
             row.badgeNumeral = badge.numeral;
         } else {
             // Obscurus = mid-calibration. initial_calibration_games is the
-            // pre-match count, so this match is cal #count+1.
+            // REMAINING count incl. this match (8 → 1), so this match is
+            // cal #8-count+1; 0 with no revealed rank = unrated.
             const cal = r.initial_calibration_games || 0;
             row.badgeText =
-                cal < CALIBRATION_MATCHES
-                    ? `Cal ${Math.min(CALIBRATION_MATCHES, cal + 1)}/${CALIBRATION_MATCHES}`
+                cal > 0
+                    ? `Cal ${CALIBRATION_MATCHES - cal + 1}/${CALIBRATION_MATCHES}`
                     : 'Obscurus';
         }
         const before = r.initial_flat_progress || 0;

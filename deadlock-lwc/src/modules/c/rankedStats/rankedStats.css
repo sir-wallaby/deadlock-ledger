@@ -67,6 +67,25 @@
     margin-bottom: 0.2rem;
 }
 
+.rank-card__mmr {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--lwc-colorText, #181818);
+    font-variant-numeric: tabular-nums;
+}
+
+.rank-card__mmr-unit {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-left: 0.25rem;
+}
+
+.rank-card__mmr-to {
+    margin-left: 0.5rem;
+}
+
 .rank-card__points-track {
     height: 8px;
     border-radius: 4px;
@@ -105,7 +124,7 @@
     border-color: var(--lwc-colorText, #181818);
 }
 
-.chip--form {
+.chip--record {
     gap: 0.2rem;
 }
 
@@ -113,25 +132,10 @@
     font-weight: 700;
 }
 
-.form__dot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    font-size: 0.65rem;
-    font-weight: 700;
-    border-radius: 4px;
-    color: var(--lwc-colorBackground, #ffffff);
-    background: var(--lwc-colorTextWeak, #74685e);
-}
-
-.form__dot--win {
-    background: var(--lwc-colorPositive, #2e844a);
-}
-
-.form__dot--loss {
-    background: var(--lwc-colorNegative, #ea001e);
+.chip__value {
+    font-weight: 600;
+    color: var(--lwc-colorText, #181818);
+    font-variant-numeric: tabular-nums;
 }
 
 /* ---- Badge chart ---- */
@@ -146,24 +150,30 @@
     height: auto;
 }
 
-.chart__calib {
-    fill: var(--lwc-colorTrack, #ecebe9);
-    opacity: 0.6;
-}
-
-.chart__calib-label {
-    fill: var(--lwc-colorTextWeak, #74685e);
-    font-size: 9px;
-}
-
 .chart__grid {
     stroke: var(--lwc-colorBorder, #e5e5e5);
     stroke-width: 1;
 }
 
+.chart__grid--rank {
+    stroke: var(--lwc-colorTextWeak, #74685e);
+    stroke-width: 1.5;
+}
+
 .chart__grid-label {
     fill: var(--lwc-colorTextWeak, #74685e);
     font-size: 9px;
+}
+
+.chart__grid-label--rank {
+    fill: var(--lwc-colorText, #181818);
+    font-weight: 700;
+}
+
+.chart__x-label {
+    fill: var(--lwc-colorTextWeak, #74685e);
+    font-size: 9px;
+    text-anchor: middle;
 }
 
 .chart__line {
@@ -205,59 +215,6 @@
     font-size: 0.85rem;
 }
 
-/* ---- Hero MMR strip ---- */
-
-.mmr-card__title {
-    margin-bottom: 0.5rem;
-}
-
-.mmr-card__list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.mmr-card__item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.6rem;
-    border-radius: 999px;
-    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
-    background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
-    max-width: 100%;
-}
-
-.mmr-card__icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex: 0 0 auto;
-    background: var(--lwc-colorBackground, #ffffff);
-}
-
-.mmr-card__name {
-    font-size: 0.85rem;
-    color: var(--lwc-colorText, #181818);
-    max-width: 120px;
-    min-width: 0;
-}
-
-.mmr__value {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--lwc-colorTextWeak, #74685e);
-}
-
-.mmr__value--up {
-    color: var(--lwc-colorPositive, #2e844a);
-}
-
-.mmr__value--down {
-    color: var(--lwc-colorNegative, #ea001e);
-}
-
 /* ---- Ranked hero table ---- */
 
 .ranked-heroes__title {
@@ -292,7 +249,7 @@
     background: var(--lwc-colorBackgroundSecondary, #f3f2f1);
 }
 
-/* ---- Recent ranked ---- */
+/* ---- Ranked matches list (all of the season, scrollable) ---- */
 
 .ranked-recent__title {
     margin-bottom: 0.5rem;
@@ -310,6 +267,9 @@
     padding: 0;
     display: grid;
     gap: 0.4rem;
+    max-height: 300px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .ranked-recent__item {
@@ -466,12 +426,22 @@
 }
 
 .match-mmr__team-head {
+    margin-bottom: 0.3rem;
+}
+
+.match-mmr__team-name {
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--lwc-colorTextWeak, #74685e);
-    margin-bottom: 0.3rem;
+}
+
+.match-mmr__team-avg {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--lwc-colorText, #181818);
+    font-variant-numeric: tabular-nums;
 }
 
 .match-mmr__row {

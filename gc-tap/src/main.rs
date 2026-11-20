@@ -15,6 +15,9 @@
 //!                       block (per-match MMR) + match info. Fetched a few
 //!                       matches per run under a daily budget; older matches
 //!                       drain over days.
+//!   avatar.jpg          The account's Steam avatar (profile-page og:image),
+//!                       re-scraped at most once per 24 h. Decorative:
+//!                       failures keep the old file.
 //!
 //! Commands:
 //!   login   Interactive one-time login (password + Steam Guard). Saves a
@@ -1014,6 +1017,117 @@ fn write_json_if_changed(path: PathBuf, value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 
+/// The account's Steam avatar, published to `avatar.jpg` for the
+/// dashboard's player bar. The browser can't fetch it itself
+/// (steamcommunity.com sends no CORS headers), so the poller scrapes the
+/// profile page's og:image — a stable CDN URL
+/// (avatars.<edge>.steamstatic.com/<md5>_full.jpg, edge = akamai|fastly) —
+/// and downloads the JPEG. Decorative: every failure is a warning that keeps the existing
+/// file, never a run failure. The file's mtime is the throttle ledger:
+/// at most one scrape per 24 h, so a steady-state run costs no requests.
+async fn fetch_avatar(cfg: &Config) {
+    let path = data_dir().join("avatar.jpg");
+    if let Some(age) = file_age(&path) {
+        if age < Duration::from_secs(86_400) {
+            eprintln!("avatar: {age:?} old — skipped (24 h throttle)");
+            return;
+        }
+    }
+    let http = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+    {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("avatar: HTTP client failed ({e}) — keeping old");
+            return;
+        }
+    };
+    let profile = format!("https://steamcommunity.com/profiles/{}/", cfg.steam64);
+    let html = match http.get(&profile).send().await {
+        Ok(r) => match r.error_for_status() {
+            Ok(r) => match r.text().await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("avatar: profile read failed ({e}) — keeping old");
+                    return;
+                }
+            },
+            Err(e) => {
+                eprintln!("avatar: profile fetch failed ({e}) — keeping old");
+                return;
+            }
+        },
+        Err(e) => {
+            eprintln!("avatar: profile fetch failed ({e}) — keeping old");
+            return;
+        }
+    };
+    let marker = "og:image\" content=\"";
+    let url = match html.find(marker) {
+        Some(i) => match html[i + marker.len()..].find('"') {
+            Some(e) => html[i + marker.len()..i + marker.len() + e].to_string(),
+            None => {
+                eprintln!("avatar: malformed og:image — keeping old");
+                return;
+            }
+        },
+        None => {
+            eprintln!("avatar: no og:image in profile page — keeping old");
+            return;
+        }
+    };
+    // The CDN edge varies per request (akamai, fastly, …) — only the
+    // avatars.*.steamstatic.com shape is stable.
+    if !url.starts_with("https://avatars.") || !url.contains(".steamstatic.com/") {
+        eprintln!("avatar: unexpected og:image ({url}) — keeping old");
+        return;
+    }
+    let bytes = match http.get(&url).send().await {
+        Ok(r) => match r.error_for_status() {
+            Ok(r) => match r.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("avatar: image download failed ({e}) — keeping old");
+                    return;
+                }
+            },
+            Err(e) => {
+                eprintln!("avatar: image download failed ({e}) — keeping old");
+                return;
+            }
+        },
+        Err(e) => {
+            eprintln!("avatar: image download failed ({e}) — keeping old");
+            return;
+        }
+    };
+    if let Ok(existing) = fs::read(&path) {
+        if existing == bytes.to_vec() {
+            eprintln!("avatar: unchanged — skipped write to {}", path.display());
+            return;
+        }
+    }
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("avatar: creating data dir failed ({e}) — keeping old");
+            return;
+        }
+    }
+    let tmp = path.with_extension("jpg.tmp");
+    match fs::write(&tmp, &bytes).and_then(|_| fs::rename(&tmp, &path)) {
+        Ok(()) => eprintln!("wrote {} ({} bytes)", path.display(), bytes.len()),
+        Err(e) => eprintln!("avatar: write failed ({e}) — keeping old"),
+    }
+}
+
+fn file_age(path: &Path) -> Option<Duration> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|mtime| std::time::SystemTime::now().duration_since(mtime).ok())
+}
+
 /// Fetch one ranked interval's match history. The GC gates the five ranked
 /// fields on game_mode + match_mode + rank_interval all being set (a plain
 /// call returns every one unset); with the interval set, the response holds
@@ -1404,6 +1518,9 @@ async fn main() -> Result<()> {
         }
         Some("fetch") => {
             let cfg = Config::load()?;
+            // Decorative, independent of the GC round trip — refresh it
+            // even when the GC fetch below fails (best effort, never errors).
+            fetch_avatar(&cfg).await;
             let interval = parse_interval(&args).unwrap_or(RANK_INTERVAL);
             fetch_matches(
                 &cfg,
